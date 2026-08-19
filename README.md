@@ -53,7 +53,7 @@ VITE_GOOGLE_SHEETS_WEBHOOK_URLS=https://script.google.com/macros/s/.../exec
 
 ## النشر المجاني على GitHub Pages
 
-نسخة GitHub Pages الجاهزة موجودة داخل مجلد `docs/` ومبنية بمسار المستودع الصحيح `/Fi/`. إعداد Pages المطلوب هو: **Deploy from a branch → فرع Arena الحالي → مجلد `/docs`**.
+نسخة GitHub Pages الجاهزة موجودة داخل مجلد `docs/` ومبنية لمسار `/Fi/docs/`. إعداد Pages الحالي ينشر فرع Arena من الجذر، لذلك يحوّل الرابط الرئيسي الزائر تلقائياً إلى النسخة الجاهزة دون صفحة فارغة.
 
 رابط الموقع:
 
@@ -70,7 +70,7 @@ git commit -m "Update GitHub Pages site"
 git push
 ```
 
-يحتوي `docs/` على ملف `.nojekyll`، لذلك تُقدَّم ملفات Vite والصور مباشرة دون تدخل Jekyll.
+يحتوي جذر المستودع و`docs/` على ملف `.nojekyll`، لذلك تُقدَّم ملفات Vite والصور مباشرة دون تدخل Jekyll.
 
 ## النشر المجاني على Netlify
 

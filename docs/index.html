@@ -2,21 +2,28 @@
 <html lang="ar" dir="rtl">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Fallback for repositories where Pages is still configured from the branch root.
+      // Netlify and local development ignore this; GitHub Pages serves the ready docs build.
+      if (location.hostname === 'marketplacedz6-del.github.io' && !location.pathname.startsWith('/Fi/docs/')) {
+        location.replace('/Fi/docs/' + location.search + location.hash)
+      }
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#172437" />
     <meta name="description" content="Elegance Home & Style — لمسات راقية تصنع أناقة بيتك. توصيل إلى 58 ولاية والدفع عند الاستلام." />
     <meta property="og:title" content="Elegance Home & Style" />
     <meta property="og:description" content="تفاصيل صغيرة. أناقة لا تُنسى. توصيل إلى 58 ولاية والدفع عند الاستلام." />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="/Fi/assets/cover.png" />
-    <link rel="icon" type="image/png" href="/Fi/assets/logo.png" />
-    <link rel="apple-touch-icon" href="/Fi/assets/logo.png" />
+    <meta property="og:image" content="/Fi/docs/assets/cover.png" />
+    <link rel="icon" type="image/png" href="/Fi/docs/assets/logo.png" />
+    <link rel="apple-touch-icon" href="/Fi/docs/assets/logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Noto+Kufi+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <title>Elegance Home & Style</title>
-    <script type="module" crossorigin src="/Fi/assets/index-CH_8a7lC.js"></script>
-    <link rel="stylesheet" crossorigin href="/Fi/assets/index-CfXMeoIG.css">
+    <script type="module" crossorigin src="/Fi/docs/assets/index-ksrklKgm.js"></script>
+    <link rel="stylesheet" crossorigin href="/Fi/docs/assets/index-CfXMeoIG.css">
   </head>
   <body>
     <div id="root"></div>
