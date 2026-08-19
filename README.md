@@ -1,1 +1,88 @@
-# Fi
+# Elegance Home & Style
+
+متجر إلكتروني عربي/فرنسي بتصميم حصري لمنتجات الديكور المنزلي، مبني بـ React + TypeScript + Vite.
+
+## المميزات المنجزة
+
+- واجهة عربية RTL وفرنسية LTR مع تبديل فوري للغة.
+- تصميم متجاوب بالكامل للهاتف، اللوحة، والحاسوب.
+- كتالوج منتجات مع التصنيف، البحث، والترتيب حسب السعر.
+- عرض سريع للمنتج، مفضلة، تقييمات، أسعار مخفضة، وحالة المخزون.
+- سلة متكاملة مع تعديل الكمية والحفظ المحلي لاسترجاع السلة لاحقاً.
+- Checkout جزائري يشمل جميع الولايات الـ58 والدفع عند الاستلام.
+- إنشاء رقم طلب وحفظ الطلبات محلياً مع شاشة نجاح.
+- ربط اختياري مع API/CRM وWebhooks شركات التوصيل وGoogle Sheets.
+- طبقة Pixels متعددة وغير محدودة: Meta، TikTok، Google، Pinterest، Snapchat.
+- دعم مباشر عبر WhatsApp، Newsletter، صفحات أقسام وقصة العلامة.
+- الشعار الأصلي مستخدم في الترويسة، الغلاف، الفوتر، وجميع صور المنتجات كعلامة مائية دقيقة.
+- لا توجد أي علامة DZBuild داخل المتجر.
+
+## التشغيل
+
+```bash
+npm install
+npm run dev
+```
+
+النسخة الإنتاجية:
+
+```bash
+npm run build
+npm run preview
+```
+
+## إعداد التكاملات
+
+انسخ ملف البيئة التجريبي:
+
+```bash
+cp .env.example .env
+```
+
+يمكن إدخال أكثر من Pixel أو Webhook بفصل القيم بفاصلة:
+
+```env
+VITE_META_PIXEL_IDS=123456,789012
+VITE_GOOGLE_TAG_IDS=G-XXXX,G-YYYY
+VITE_ORDER_API_URL=https://api.example.dz/orders
+VITE_DELIVERY_WEBHOOK_URLS=https://delivery-one.dz/hook,https://delivery-two.dz/hook
+VITE_GOOGLE_SHEETS_WEBHOOK_URLS=https://script.google.com/macros/s/.../exec
+```
+
+تُرسل الطلبات الجديدة بصيغة JSON إلى كل الروابط المفعلة، بينما يبقى الطلب محفوظاً محلياً عند انقطاع أحد التكاملات.
+
+## النشر المجاني على GitHub Pages
+
+نسخة GitHub Pages الجاهزة موجودة داخل مجلد `docs/` ومبنية بمسار المستودع الصحيح `/Fi/`. إعداد Pages المطلوب هو: **Deploy from a branch → فرع Arena الحالي → مجلد `/docs`**.
+
+رابط الموقع:
+
+```text
+https://marketplacedz6-del.github.io/Fi/
+```
+
+عند تعديل المتجر لاحقاً، حدّث نسخة Pages ثم ارفع المجلد:
+
+```bash
+npm run build:github
+git add docs
+git commit -m "Update GitHub Pages site"
+git push
+```
+
+يحتوي `docs/` على ملف `.nojekyll`، لذلك تُقدَّم ملفات Vite والصور مباشرة دون تدخل Jekyll.
+
+## النشر المجاني على Netlify
+
+ملف `netlify.toml` جاهز ولا يحتاج إعداداً يدوياً للبناء:
+
+1. اختر **Add new site → Import an existing project** في Netlify.
+2. اربط مستودع GitHub `marketplacedz6-del/Fi`.
+3. اختر الفرع المطلوب؛ سيقرأ Netlify الأمر `npm run build` ومجلد النشر `dist` تلقائياً.
+4. اضغط **Deploy**.
+
+تمت إضافة إعادة توجيه SPA، ترويسات أمان، Cache للملفات، وإصدار Node 22. يمكن إضافة الـPixels وWebhooks من **Site configuration → Environment variables** باستخدام أسماء المتغيرات الموجودة في `.env.example`.
+
+## ملاحظة الإنتاج
+
+الواجهة والمتجر وتدفق الطلب جاهزة. الميزات الخادمية مثل حسابات 25 موظفاً بصلاحيات، CRM مركزي متعدد المستخدمين، مفاتيح API خاصة، رسائل استرداد السلات الآلية، نطاق مخصص، وSLA 99.9% تحتاج نشر Backend وقاعدة بيانات وخدمات خارجية فعلية. الكود الحالي يجهز نقاط الربط عبر متغيرات البيئة ولا يتضمن مفاتيح أو بيانات حساسة.

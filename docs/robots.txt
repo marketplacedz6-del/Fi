@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://marketplacedz6-del.github.io/Fi/sitemap.xml
