@@ -77,6 +77,7 @@ type AdminDashboardProps = {
   onOpenStore: () => void
   onAddProduct: (product: ProductDraft) => void
   onDeleteProduct: (id: number) => void
+  onRestoreProducts: () => void
 }
 
 type Tab = 'overview' | 'products' | 'orders' | 'crm' | 'pages' | 'marketing' | 'integrations' | 'team' | 'settings'
@@ -130,7 +131,7 @@ const providerClass: Record<PixelProvider, string> = {
 }
 
 export default function AdminDashboard({
-  lang, logo, products, orders, money, onClose, onLogout, onOpenStore, onAddProduct, onDeleteProduct,
+  lang, logo, products, orders, money, onClose, onLogout, onOpenStore, onAddProduct, onDeleteProduct, onRestoreProducts,
 }: AdminDashboardProps) {
   const ar = lang === 'ar'
   const l = (arabic: string, french: string) => ar ? arabic : french
@@ -192,28 +193,28 @@ export default function AdminDashboard({
 
   const notify = (message: string) => setNotice(message)
 
-  const navGroups: { label: string; items: { id: Tab; label: string; icon: ReactNode; badge?: number }[] }[] = [
+  const navGroups: { label: string; items: { id: Tab; label: string; icon: ReactNode; badge?: string | number }[] }[] = [
     {
       label: l('الرئيسية', 'Principal'),
       items: [
         { id: 'overview', label: l('نظرة عامة', 'Vue générale'), icon: <LayoutDashboard /> },
-        { id: 'products', label: l('المنتجات', 'Produits'), icon: <ShoppingBag />, badge: products.length },
-        { id: 'orders', label: l('الطلبات', 'Commandes'), icon: <PackageCheck />, badge: orders.length },
+        { id: 'products', label: l('المنتجات', 'Produits'), icon: <ShoppingBag />, badge: `${products.length} · ∞` },
+        { id: 'orders', label: l('الطلبات', 'Commandes'), icon: <PackageCheck />, badge: `${orders.length} · ∞` },
         { id: 'crm', label: 'CRM', icon: <UsersRound />, badge: customers.length },
       ],
     },
     {
       label: l('النمو والتسويق', 'Croissance'),
       items: [
-        { id: 'pages', label: l('صفحات الهبوط', 'Landing pages'), icon: <PanelTop />, badge: pages.length },
-        { id: 'marketing', label: l('البيكسلات والتسويق', 'Pixels & marketing'), icon: <Target />, badge: pixels.length },
+        { id: 'pages', label: l('صفحات الهبوط', 'Landing pages'), icon: <PanelTop />, badge: `${pages.length} · ∞` },
+        { id: 'marketing', label: l('البيكسلات والتسويق', 'Pixels & marketing'), icon: <Target />, badge: `${pixels.length} · ∞` },
       ],
     },
     {
       label: l('إدارة المتجر', 'Gestion'),
       items: [
         { id: 'integrations', label: l('التكاملات', 'Intégrations'), icon: <Boxes /> },
-        { id: 'team', label: l('الموظفون', 'Équipe'), icon: <UserPlus />, badge: team.length },
+        { id: 'team', label: l('الموظفون', 'Équipe'), icon: <UserPlus />, badge: `${team.length}/25` },
         { id: 'settings', label: l('الإعدادات و API', 'Paramètres & API'), icon: <Settings /> },
       ],
     },
@@ -323,7 +324,7 @@ export default function AdminDashboard({
 
   const renderProducts = () => (
     <section className="dashboard-page">
-      <PageTitle icon={<ShoppingBag />} title={l('إدارة المنتجات', 'Gestion des produits')} text={l('أضف وعدّل منتجاتك دون أي حدود.', 'Ajoutez et gérez vos produits sans limites.')} action={<button className="smart-primary" onClick={() => setAddProductOpen(true)}><Plus /> {l('منتج جديد', 'Nouveau produit')}</button>} />
+      <PageTitle icon={<ShoppingBag />} title={l('إدارة المنتجات', 'Gestion des produits')} text={l('أضف وعدّل منتجاتك دون أي حدود. الرقم في القائمة هو العدد الحالي وليس الحد الأقصى.', 'Ajoutez vos produits sans limites. Le nombre affiché est le total actuel, pas une limite.')} action={<div className="page-action-buttons"><button className="smart-secondary" onClick={() => { onRestoreProducts(); notify(l('تمت استعادة المنتجات الأصلية', 'Produits d’origine restaurés')) }}><RefreshCw /> {l('استعادة الأصلية', 'Restaurer')}</button><button className="smart-primary" onClick={() => setAddProductOpen(true)}><Plus /> {l('منتج جديد', 'Nouveau produit')}</button></div>} />
       <div className="metric-strip"><Metric label={l('كل المنتجات', 'Tous les produits')} value={products.length} /><Metric label={l('متوفر', 'En stock')} value={products.length} green /><Metric label={l('مخزون منخفض', 'Stock faible')} value={2} warning /><Metric label={l('الحد الأقصى', 'Limite')} value={l('غير محدود', 'Illimité')} /></div>
       <div className="dashboard-card data-card">
         <div className="table-tools"><label><Search /><input value={productSearch} onChange={e => setProductSearch(e.target.value)} placeholder={l('ابحث في المنتجات...', 'Rechercher un produit...')} /></label><span>{filteredProducts.length} {l('منتج', 'produits')}</span></div>
@@ -430,7 +431,7 @@ export default function AdminDashboard({
         <div className="smart-logo"><img src={logo} alt="Elegance Home & Style" /><div><b>Elegance</b><span>CONTROL CENTER</span></div></div>
         <button className="sidebar-mobile-close" onClick={() => setSidebarOpen(false)}><X /></button>
         <div className="plan-badge"><Crown /><div><b>Elite Plan</b><span>{l('كل المميزات مفعلة', 'Toutes les fonctions actives')}</span></div><CircleCheck /></div>
-        <nav>{navGroups.map(group => <div className="nav-group" key={group.label}><p>{group.label}</p>{group.items.map(item => <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => switchTab(item.id)}>{item.icon}<span>{item.label}</span>{typeof item.badge === 'number' && <em>{item.badge}</em>}</button>)}</div>)}</nav>
+        <nav>{navGroups.map(group => <div className="nav-group" key={group.label}><p>{group.label}</p>{group.items.map(item => <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => switchTab(item.id)}>{item.icon}<span>{item.label}</span>{item.badge !== undefined && <em>{item.badge}</em>}</button>)}</div>)}</nav>
         <button className="smart-support" onClick={() => window.open('https://wa.me/213555000000', '_blank')}><Headphones /><div><b>{l('دعم مباشر', 'Support direct')}</b><span>24/7 · Online</span></div><i /></button>
         <button className="smart-logout" onClick={onLogout}><LogOut /> {l('تسجيل الخروج', 'Déconnexion')}</button>
       </aside>

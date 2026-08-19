@@ -74,17 +74,6 @@ const credentialHash = async (value: string) => {
   }
 }
 
-const hasAdminSession = () => {
-  try { return sessionStorage.getItem('ehs-admin-session') === 'active' } catch { return false }
-}
-
-const saveAdminSession = (active: boolean) => {
-  try {
-    if (active) sessionStorage.setItem('ehs-admin-session', 'active')
-    else sessionStorage.removeItem('ehs-admin-session')
-  } catch { /* Private browsing can block storage. */ }
-}
-
 type Product = {
   id: number
   name: Localized
@@ -304,7 +293,7 @@ function App() {
   const [subscribed, setSubscribed] = useState(false)
   const [loginOpen, setLoginOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
-  const [isAuthenticated, setIsAuthenticated] = useState(hasAdminSession)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [authError, setAuthError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loginPending, setLoginPending] = useState(false)
@@ -359,6 +348,7 @@ function App() {
       setCheckoutOpen(false)
       setLoginOpen(false)
       setAccountOpen(false)
+      setIsAuthenticated(false)
     }
     window.addEventListener('keydown', close)
     return () => window.removeEventListener('keydown', close)
@@ -442,7 +432,6 @@ function App() {
         setAuthError(isAr ? 'البريد الإلكتروني أو كلمة السر غير صحيحة.' : 'E-mail ou mot de passe incorrect.')
         return
       }
-      saveAdminSession(true)
       setIsAuthenticated(true)
       setLoginOpen(false)
       setAccountOpen(true)
@@ -454,10 +443,13 @@ function App() {
     }
   }
 
-  const logout = () => {
-    saveAdminSession(false)
-    setIsAuthenticated(false)
+  const lockDashboard = () => {
     setAccountOpen(false)
+    setIsAuthenticated(false)
+  }
+
+  const logout = () => {
+    lockDashboard()
     setToast(isAr ? 'تم تسجيل الخروج' : 'Déconnexion réussie')
   }
 
@@ -870,8 +862,8 @@ function App() {
             <button className="modal-close" onClick={() => setLoginOpen(false)} aria-label={t.close}><X /></button>
             <div className="login-brand"><img src={assetPath('assets/logo.png')} alt="Elegance Home & Style" /></div>
             <p className="login-kicker"><LockKeyhole /> {isAr ? 'دخول آمن' : 'Accès sécurisé'}</p>
-            <h2 id="login-title">{isAr ? 'الدخول إلى حساب المتجر' : 'Connexion au compte boutique'}</h2>
-            <p className="login-intro">{isAr ? 'أدخل بيانات حسابك للوصول إلى لوحة إدارة Elegance.' : 'Saisissez vos identifiants pour accéder au tableau de bord Elegance.'}</p>
+            <h2 id="login-title">{isAr ? 'بوابة دخول إدارة المتجر' : 'Portail d’administration'}</h2>
+            <p className="login-intro">{isAr ? 'أدخل بيانات المالك للوصول الآمن إلى مركز تحكم Elegance.' : 'Saisissez les identifiants du propriétaire pour accéder au centre de contrôle Elegance.'}</p>
             <form onSubmit={handleLogin}>
               <label>
                 <span>{isAr ? 'البريد الإلكتروني' : 'Adresse e-mail'}</span>
@@ -889,25 +881,26 @@ function App() {
                 {loginPending ? (isAr ? 'جارٍ التحقق...' : 'Vérification...') : (isAr ? 'تسجيل الدخول' : 'Se connecter')}
               </button>
             </form>
-            <p className="auth-security"><LockKeyhole /> {isAr ? 'جلسة الدخول محفوظة في هذا المتصفح فقط.' : 'La session est conservée uniquement dans ce navigateur.'}</p>
+            <p className="auth-security"><LockKeyhole /> {isAr ? 'تُقفل اللوحة تلقائياً عند إغلاقها وتعود بوابة الدخول.' : 'Le tableau se verrouille automatiquement à sa fermeture.'}</p>
           </div>
         </div>
       )}
 
       {accountOpen && isAuthenticated && (
         <div className="overlay modal-overlay account-overlay">
-          <DashboardErrorBoundary lang={lang} onClose={() => setAccountOpen(false)}>
+          <DashboardErrorBoundary lang={lang} onClose={lockDashboard}>
             <AdminDashboard
               lang={lang}
               logo={assetPath('assets/logo.png')}
               products={catalogProducts}
               orders={storedOrders}
               money={money}
-              onClose={() => setAccountOpen(false)}
+              onClose={lockDashboard}
               onLogout={logout}
-              onOpenStore={() => { setAccountOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+              onOpenStore={() => { lockDashboard(); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
               onAddProduct={addDashboardProduct}
               onDeleteProduct={deleteDashboardProduct}
+              onRestoreProducts={() => setCatalogProducts(defaultProducts)}
             />
           </DashboardErrorBoundary>
         </div>
