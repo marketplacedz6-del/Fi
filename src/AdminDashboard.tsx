@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react'
+import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BarChart3,
   Bell,
@@ -202,6 +202,9 @@ export default function AdminDashboard({
   const [sheetUrl, setSheetUrl] = useState('')
   const [memberName, setMemberName] = useState('')
   const [memberEmail, setMemberEmail] = useState('')
+  const [globalSearch, setGlobalSearch] = useState('')
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
+  const globalSearchInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => writeLocal('ehs-landing-pages', JSON.stringify(pages)), [pages])
   useEffect(() => writeLocal('ehs-dashboard-pixels', JSON.stringify(pixels)), [pixels])
@@ -215,6 +218,18 @@ export default function AdminDashboard({
     const timer = window.setTimeout(() => setNotice(''), 2800)
     return () => window.clearTimeout(timer)
   }, [notice])
+
+  useEffect(() => {
+    const focusSearch = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        setMobileSearchOpen(true)
+        requestAnimationFrame(() => globalSearchInput.current?.focus())
+      }
+    }
+    window.addEventListener('keydown', focusSearch)
+    return () => window.removeEventListener('keydown', focusSearch)
+  }, [])
 
   const revenue = orders.reduce((sum, order) => sum + (Number(order.total) || 0), 0)
   const now = new Date()
@@ -300,6 +315,23 @@ export default function AdminDashboard({
   const categoryCounts = products.reduce<Record<string, number>>((result, product) => ({ ...result, [product.category]: (result[product.category] ?? 0) + 1 }), {})
   const filteredOrders = orders.filter(order => `${order.id} ${String(order.customer.name ?? '')} ${String(order.customer.phone ?? '')}`.toLowerCase().includes(orderSearch.toLowerCase()))
   const extraStaffCost = Math.max(0, team.length - 25) * 200
+  const globalSearchResults = useMemo(() => {
+    const query = globalSearch.trim().toLowerCase()
+    if (!query) return []
+    const productMatches = products.filter(product => `${product.name.ar} ${product.name.fr} ${productSku(product)}`.toLowerCase().includes(query)).slice(0, 3)
+      .map(product => ({ id: `product-${product.id}`, label: product.name[lang], detail: productSku(product), type: l('منتج', 'Produit'), tab: 'products' as Tab }))
+    const orderMatches = orders.filter(order => `${order.id} ${String(order.customer.name ?? '')} ${String(order.customer.phone ?? '')}`.toLowerCase().includes(query)).slice(0, 3)
+      .map(order => ({ id: `order-${order.id}`, label: order.id, detail: String(order.customer.name ?? l('زبون', 'Client')), type: l('طلب', 'Commande'), tab: 'orders' as Tab }))
+    const customerMatches = customers.filter(customer => `${customer.name} ${customer.phone}`.toLowerCase().includes(query)).slice(0, 3)
+      .map(customer => ({ id: `customer-${customer.phone}`, label: customer.name, detail: customer.phone, type: 'CRM', tab: 'crm' as Tab }))
+    return [...productMatches, ...orderMatches, ...customerMatches].slice(0, 6)
+  }, [globalSearch, products, orders, customers, lang]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const openSearchResult = (result: { tab: Tab }) => {
+    setGlobalSearch('')
+    setMobileSearchOpen(false)
+    switchTab(result.tab)
+  }
 
   const notify = (message: string) => setNotice(message)
 
@@ -338,7 +370,8 @@ export default function AdminDashboard({
   const addLandingPage = (event: FormEvent) => {
     event.preventDefault()
     if (!newPage.trim()) return
-    const slug = newPage.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || `page-${Date.now()}`
+    // Preserve Arabic and French titles instead of silently turning Arabic slugs into a timestamp.
+    const slug = newPage.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^\p{L}\p{N}-]/gu, '') || `page-${Date.now()}`
     setPages(current => [...current, { id: Date.now(), title: newPage.trim(), slug, published: false, views: 0 }])
     setNewPage('')
     notify(l('تم إنشاء صفحة هبوط جديدة', 'Nouvelle landing page créée'))
@@ -650,7 +683,7 @@ export default function AdminDashboard({
 
       <main className="smart-main">
         <header className="smart-topbar">
-          <div className="topbar-start"><button className="dashboard-menu" onClick={() => setSidebarOpen(true)}><Menu /></button><div className="global-search"><Search /><input placeholder={l('ابحث في متجرك...', 'Rechercher dans la boutique...')} /><kbd>⌘ K</kbd></div></div>
+          <div className="topbar-start"><button className="dashboard-menu" onClick={() => setSidebarOpen(true)} aria-label={l('فتح القائمة', 'Ouvrir le menu')}><Menu /></button><button className="dashboard-search" onClick={() => { setMobileSearchOpen(true); requestAnimationFrame(() => globalSearchInput.current?.focus()) }} aria-label={l('البحث في المتجر', 'Rechercher dans la boutique')}><Search /></button><div className={`global-search ${mobileSearchOpen ? 'open' : ''}`}><Search /><input ref={globalSearchInput} value={globalSearch} onFocus={() => setMobileSearchOpen(true)} onChange={event => setGlobalSearch(event.target.value)} placeholder={l('ابحث في المنتجات، الطلبات أو العملاء...', 'Produits, commandes ou clients...')} /><kbd>⌘ K</kbd>{mobileSearchOpen && <><button className="global-search-close" onClick={() => { setMobileSearchOpen(false); setGlobalSearch('') }} aria-label={l('إغلاق البحث', 'Fermer la recherche')}><X /></button>{globalSearch.trim() && <div className="global-search-results">{globalSearchResults.length ? globalSearchResults.map(result => <button key={result.id} onClick={() => openSearchResult(result)}><span>{result.type}</span><p><b>{result.label}</b><small dir="ltr">{result.detail}</small></p><ChevronLeft /></button>) : <p className="global-search-empty">{l('لا توجد نتائج مطابقة', 'Aucun résultat')}</p>}</div>}</>}</div></div>
           <div className="topbar-actions">
             <button className="visit-store" onClick={onOpenStore}><Store /> {l('عرض المتجر', 'Voir la boutique')} <ExternalLink /></button>
             <div className="notification-wrap"><button className="notification-button" onClick={() => setNotificationsOpen(value => !value)}><Bell /><i>3</i></button>{notificationsOpen && <div className="notification-popover"><h3>{l('الإشعارات', 'Notifications')} <span>3</span></h3><Notification icon={<PackageCheck />} title={l('طلب جديد', 'Nouvelle commande')} text={l('تم تسجيل طلب جديد في المتجر.', 'Une commande a été enregistrée.')} /><Notification icon={<CircleAlert />} title={l('تنبيه ذكي', 'Alerte intelligente')} text={l('اربط شركة توصيل ثانية لتحسين الأداء.', 'Connectez un second transporteur.')} /><Notification icon={<ShieldCheck />} title="SLA 99.9%" text={l('جميع الأنظمة تعمل بشكل طبيعي.', 'Tous les systèmes sont opérationnels.')} /></div>}</div>
