@@ -25,12 +25,35 @@ declare global {
 const ids = (value: string | undefined) =>
   (value ?? '').split(',').map(id => id.trim()).filter(Boolean)
 
-const pixelIds = {
+const environmentPixelIds = {
   meta: ids(import.meta.env.VITE_META_PIXEL_IDS),
   tiktok: ids(import.meta.env.VITE_TIKTOK_PIXEL_IDS),
   google: ids(import.meta.env.VITE_GOOGLE_TAG_IDS),
   pinterest: ids(import.meta.env.VITE_PINTEREST_TAG_IDS),
   snapchat: ids(import.meta.env.VITE_SNAPCHAT_PIXEL_IDS),
+}
+
+type RuntimeProvider = 'Meta' | 'TikTok' | 'Google' | 'Pinterest' | 'Snapchat'
+type RuntimePixel = { provider: RuntimeProvider; pixelId: string; active: boolean }
+
+const configuredPixelIds = () => {
+  const configured = {
+    meta: [...environmentPixelIds.meta],
+    tiktok: [...environmentPixelIds.tiktok],
+    google: [...environmentPixelIds.google],
+    pinterest: [...environmentPixelIds.pinterest],
+    snapchat: [...environmentPixelIds.snapchat],
+  }
+  try {
+    const runtime = JSON.parse(localStorage.getItem('ehs-dashboard-pixels') ?? '[]') as RuntimePixel[]
+    runtime.filter(pixel => pixel.active).forEach(pixel => {
+      const key = pixel.provider.toLowerCase() as keyof typeof configured
+      if (!configured[key].includes(pixel.pixelId)) configured[key].push(pixel.pixelId)
+    })
+  } catch {
+    // Invalid local configuration should never block the storefront.
+  }
+  return configured
 }
 
 const addScript = (id: string, source: string) => {
@@ -51,6 +74,8 @@ const makeQueue = (name: 'fbq' | 'pintrk' | 'snaptr') => {
 }
 
 export function initializeAnalytics() {
+  const pixelIds = configuredPixelIds()
+
   if (pixelIds.meta.length) {
     const fbq = makeQueue('fbq')
     window._fbq = fbq
@@ -89,6 +114,41 @@ export function initializeAnalytics() {
     const snaptr = makeQueue('snaptr')
     addScript('ehs-snapchat-pixel', 'https://sc-static.net/scevent.min.js')
     pixelIds.snapchat.forEach(id => snaptr('init', id))
+    snaptr('track', 'PAGE_VIEW')
+  }
+}
+
+/** Activates a pixel added from the smart dashboard without requiring a rebuild. */
+export function registerRuntimePixel(provider: RuntimeProvider, pixelId: string) {
+  const id = pixelId.trim()
+  if (!id) return
+
+  if (provider === 'Meta') {
+    const fbq = makeQueue('fbq')
+    window._fbq = fbq
+    addScript('ehs-meta-pixel', 'https://connect.facebook.net/en_US/fbevents.js')
+    fbq('init', id)
+    fbq('track', 'PageView')
+  } else if (provider === 'Google') {
+    window.dataLayer = window.dataLayer ?? []
+    window.gtag = window.gtag ?? ((...args: unknown[]) => window.dataLayer?.push(args))
+    addScript('ehs-google-tag', `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}`)
+    window.gtag('config', id)
+  } else if (provider === 'TikTok') {
+    window.ttq = window.ttq ?? []
+    window.ttq.track = window.ttq.track ?? ((...args: unknown[]) => window.ttq?.push(['track', ...args]))
+    window.ttq.page = window.ttq.page ?? (() => window.ttq?.push(['page']))
+    addScript(`ehs-tiktok-${id}`, `https://analytics.tiktok.com/i18n/pixel/events.js?sdkid=${encodeURIComponent(id)}&lib=ttq`)
+    window.ttq.page?.()
+  } else if (provider === 'Pinterest') {
+    const pintrk = makeQueue('pintrk')
+    addScript('ehs-pinterest-tag', 'https://s.pinimg.com/ct/core.js')
+    pintrk('load', id)
+    pintrk('page')
+  } else if (provider === 'Snapchat') {
+    const snaptr = makeQueue('snaptr')
+    addScript('ehs-snapchat-pixel', 'https://sc-static.net/scevent.min.js')
+    snaptr('init', id)
     snaptr('track', 'PAGE_VIEW')
   }
 }

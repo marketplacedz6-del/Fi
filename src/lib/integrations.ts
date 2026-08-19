@@ -16,11 +16,20 @@ const urls = (value: string | undefined) =>
  * integration is temporarily unavailable.
  */
 export async function dispatchOrder(order: StoreOrder) {
-  const endpoints = [
+  let dashboardSheets: string[] = []
+  try {
+    const savedSheets = JSON.parse(localStorage.getItem('ehs-sheets') ?? '[]') as { url: string; active: boolean }[]
+    dashboardSheets = savedSheets.filter(sheet => sheet.active && sheet.url).map(sheet => sheet.url)
+  } catch {
+    // Keep checkout operational even if a local integration is malformed.
+  }
+
+  const endpoints = [...new Set([
     ...urls(import.meta.env.VITE_ORDER_API_URL),
     ...urls(import.meta.env.VITE_DELIVERY_WEBHOOK_URLS),
     ...urls(import.meta.env.VITE_GOOGLE_SHEETS_WEBHOOK_URLS),
-  ]
+    ...dashboardSheets,
+  ])]
 
   if (!endpoints.length) return []
 

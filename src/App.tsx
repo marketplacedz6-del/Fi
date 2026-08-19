@@ -19,7 +19,6 @@ import {
   KeyRound,
   LayoutDashboard,
   LockKeyhole,
-  LogOut,
   Mail,
   MapPin,
   Menu,
@@ -29,16 +28,15 @@ import {
   Phone,
   Plus,
   Search,
-  Settings,
   ShoppingBag,
   Sparkles,
   Star,
   Trash2,
   Truck,
   UserRound,
-  UsersRound,
   X,
 } from 'lucide-react'
+import AdminDashboard from './AdminDashboard'
 import { initializeAnalytics, trackCommerceEvent } from './lib/analytics'
 import { dispatchOrder, type StoreOrder } from './lib/integrations'
 
@@ -76,7 +74,7 @@ type Product = {
 
 type CartItem = { id: number; quantity: number }
 
-const products: Product[] = [
+const defaultProducts: Product[] = [
   {
     id: 1,
     name: { ar: 'مزهرية لوتس الخزفية', fr: 'Vase Lotus en céramique' },
@@ -259,6 +257,7 @@ const readStorage = <T,>(key: string, fallback: T): T => {
 
 function App() {
   const [lang, setLang] = useState<Lang>(() => readStorage<Lang>('ehs-lang', 'ar'))
+  const [catalogProducts, setCatalogProducts] = useState<Product[]>(() => readStorage<Product[]>('ehs-products', defaultProducts))
   const [cart, setCart] = useState<CartItem[]>(() => readStorage<CartItem[]>('ehs-cart', []))
   const [wishlist, setWishlist] = useState<number[]>(() => readStorage<number[]>('ehs-wishlist', []))
   const [category, setCategory] = useState<Category>('all')
@@ -293,6 +292,7 @@ function App() {
     initializeAnalytics()
   }, [])
 
+  useEffect(() => localStorage.setItem('ehs-products', JSON.stringify(catalogProducts)), [catalogProducts])
   useEffect(() => localStorage.setItem('ehs-cart', JSON.stringify(cart)), [cart])
   useEffect(() => localStorage.setItem('ehs-wishlist', JSON.stringify(wishlist)), [wishlist])
 
@@ -331,13 +331,13 @@ function App() {
   }, [])
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
-  const cartProducts = cart.map(item => ({ ...products.find(p => p.id === item.id)!, quantity: item.quantity })).filter(Boolean)
+  const cartProducts = cart.map(item => ({ ...catalogProducts.find(p => p.id === item.id)!, quantity: item.quantity })).filter(Boolean)
   const subtotal = cartProducts.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const storedOrders = readStorage<StoreOrder[]>('ehs-orders', [])
 
   const filteredProducts = useMemo(() => {
     const query = search.trim().toLowerCase()
-    const filtered = products.filter(product => {
+    const filtered = catalogProducts.filter(product => {
       const matchesCategory = category === 'all' || product.category === category
       const text = `${product.name.ar} ${product.name.fr} ${product.description.ar} ${product.description.fr}`.toLowerCase()
       return matchesCategory && (!query || text.includes(query))
@@ -345,7 +345,7 @@ function App() {
     if (sort === 'low') return [...filtered].sort((a, b) => a.price - b.price)
     if (sort === 'high') return [...filtered].sort((a, b) => b.price - a.price)
     return filtered
-  }, [category, search, sort])
+  }, [catalogProducts, category, search, sort])
 
   const money = (value: number) => `${new Intl.NumberFormat(isAr ? 'ar-DZ' : 'fr-DZ').format(value)} ${isAr ? 'د.ج' : 'DA'}`
 
@@ -356,7 +356,7 @@ function App() {
         ? current.map(item => item.id === id ? { ...item, quantity: item.quantity + quantity } : item)
         : [...current, { id, quantity }]
     })
-    const product = products.find(item => item.id === id)
+    const product = catalogProducts.find(item => item.id === id)
     trackCommerceEvent('AddToCart', {
       content_ids: [id],
       content_name: product?.name[lang],
@@ -425,6 +425,30 @@ function App() {
     setIsAuthenticated(false)
     setAccountOpen(false)
     setToast(isAr ? 'تم تسجيل الخروج' : 'Déconnexion réussie')
+  }
+
+  const addDashboardProduct = (draft: { name: string; price: number; category: Exclude<Category, 'all'>; image: string }) => {
+    setCatalogProducts(current => [...current, {
+      id: Math.max(0, ...current.map(product => product.id)) + 1,
+      name: { ar: draft.name, fr: draft.name },
+      description: {
+        ar: 'منتج جديد من مجموعة Elegance Home & Style، اختير بعناية ليضيف لمسة راقية إلى بيتك.',
+        fr: 'Une nouveauté Elegance Home & Style, choisie pour apporter une touche raffinée à votre intérieur.',
+      },
+      category: draft.category,
+      image: draft.image,
+      price: draft.price,
+      rating: 5,
+      reviews: 0,
+      badge: { ar: 'جديد', fr: 'Nouveau' },
+    }])
+  }
+
+  const deleteDashboardProduct = (id: number) => {
+    const accepted = window.confirm(isAr ? 'هل تريد حذف هذا المنتج من المتجر؟' : 'Supprimer ce produit de la boutique ?')
+    if (!accepted) return
+    setCatalogProducts(current => current.filter(product => product.id !== id))
+    setCart(current => current.filter(item => item.id !== id))
   }
 
   const goToProducts = (selectedCategory?: Category) => {
@@ -615,8 +639,8 @@ function App() {
 
         <section className="story section-space page-shell" id="story">
           <div className="story-images">
-            <div className="story-main-image"><img src={assetPath('products/mirror.jpg')} alt={products[5].name[lang]} /></div>
-            <div className="story-small-image"><img src={assetPath('products/vase.jpg')} alt={products[0].name[lang]} /></div>
+            <div className="story-main-image"><img src={assetPath('products/mirror.jpg')} alt={defaultProducts[5].name[lang]} /></div>
+            <div className="story-small-image"><img src={assetPath('products/vase.jpg')} alt={defaultProducts[0].name[lang]} /></div>
             <div className="story-stamp"><img src={assetPath('assets/logo.png')} alt="" /></div>
           </div>
           <div className="story-copy">
@@ -837,57 +861,19 @@ function App() {
       )}
 
       {accountOpen && isAuthenticated && (
-        <div className="overlay modal-overlay account-overlay" onMouseDown={() => setAccountOpen(false)}>
-          <div className="account-modal" role="dialog" aria-modal="true" aria-labelledby="account-title" onMouseDown={e => e.stopPropagation()}>
-            <aside className="account-sidebar">
-              <img src={assetPath('assets/logo.png')} alt="Elegance Home & Style" />
-              <p>{isAr ? 'إدارة المتجر' : 'Administration'}</p>
-              <nav>
-                <button className="active"><LayoutDashboard /> {isAr ? 'نظرة عامة' : 'Vue générale'}</button>
-                <button onClick={() => { setAccountOpen(false); goToProducts() }}><ShoppingBag /> {isAr ? 'المنتجات' : 'Produits'}</button>
-                <button><PackageCheck /> {isAr ? 'الطلبات' : 'Commandes'} <span>{storedOrders.length}</span></button>
-                <button><UsersRound /> CRM</button>
-                <button><Settings /> {isAr ? 'الإعدادات' : 'Paramètres'}</button>
-              </nav>
-              <button className="sidebar-logout" onClick={logout}><LogOut /> {isAr ? 'تسجيل الخروج' : 'Déconnexion'}</button>
-            </aside>
-            <div className="account-content">
-              <div className="account-head">
-                <div><p>{isAr ? 'مرحباً بعودتك' : 'Bon retour'}</p><h2 id="account-title">Walid</h2></div>
-                <button className="icon-button" onClick={() => setAccountOpen(false)} aria-label={t.close}><X /></button>
-              </div>
-              <div className="admin-banner">
-                <div><span>{isAr ? 'حساب المالك' : 'Compte propriétaire'}</span><h3>Elegance Home & Style</h3><p dir="ltr">walid@gmail.com</p></div>
-                <div className="admin-banner-icon"><LayoutDashboard /></div>
-              </div>
-              <div className="admin-stats">
-                <AdminStat icon={<ShoppingBag />} value={products.length.toString()} label={isAr ? 'المنتجات' : 'Produits'} color="gold" />
-                <AdminStat icon={<PackageCheck />} value={storedOrders.length.toString()} label={isAr ? 'الطلبات' : 'Commandes'} color="green" />
-                <AdminStat icon={<UsersRound />} value="1 / 25" label={isAr ? 'الموظفون' : 'Équipe'} color="blue" />
-              </div>
-              <section className="recent-orders">
-                <div className="dashboard-section-title"><h3>{isAr ? 'أحدث الطلبات' : 'Commandes récentes'}</h3><span>{isAr ? 'محفوظة في المتجر' : 'Enregistrées dans la boutique'}</span></div>
-                {storedOrders.length ? (
-                  <div className="orders-list">
-                    {storedOrders.slice(-3).reverse().map(order => (
-                      <div className="order-row" key={order.id}>
-                        <div className="order-avatar"><PackageCheck /></div>
-                        <div><b dir="ltr">{order.id}</b><span>{String(order.customer.name ?? (isAr ? 'زبون' : 'Client'))}</span></div>
-                        <p>{money(order.total)}</p>
-                        <em>{isAr ? 'طلب جديد' : 'Nouvelle'}</em>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="dashboard-empty"><PackageCheck /><p>{isAr ? 'لا توجد طلبات بعد. ستظهر الطلبات الجديدة هنا.' : 'Aucune commande. Les nouvelles commandes apparaîtront ici.'}</p></div>
-                )}
-              </section>
-              <div className="dashboard-footer-actions">
-                <button className="outline-button" onClick={() => { setAccountOpen(false); goToProducts() }}><ShoppingBag /> {isAr ? 'عرض المتجر' : 'Voir la boutique'}</button>
-                <button className="logout-mobile" onClick={logout}><LogOut /> {isAr ? 'خروج' : 'Déconnexion'}</button>
-              </div>
-            </div>
-          </div>
+        <div className="overlay modal-overlay account-overlay">
+          <AdminDashboard
+            lang={lang}
+            logo={assetPath('assets/logo.png')}
+            products={catalogProducts}
+            orders={storedOrders}
+            money={money}
+            onClose={() => setAccountOpen(false)}
+            onLogout={logout}
+            onOpenStore={() => { setAccountOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+            onAddProduct={addDashboardProduct}
+            onDeleteProduct={deleteDashboardProduct}
+          />
         </div>
       )}
 
@@ -960,10 +946,6 @@ function ReviewCard({ text, name, place, featured = false }: { text: string; nam
       <div className="review-author"><div>{name.charAt(0)}</div><p><b>{name}</b><span>{place}</span></p><BadgeCheck /></div>
     </article>
   )
-}
-
-function AdminStat({ icon, value, label, color }: { icon: React.ReactNode; value: string; label: string; color: 'gold' | 'green' | 'blue' }) {
-  return <article className="admin-stat"><div className={color}>{icon}</div><p><b>{value}</b><span>{label}</span></p></article>
 }
 
 export default App
