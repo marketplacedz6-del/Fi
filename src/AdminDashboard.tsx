@@ -15,21 +15,25 @@ import {
   Copy,
   Crown,
   Database,
+  Download,
   ExternalLink,
   Eye,
   FileSpreadsheet,
   Globe2,
+  Grid3X3,
   Headphones,
   KeyRound,
   Languages,
   LayoutDashboard,
   Link2,
+  List,
   LogOut,
   Megaphone,
   Menu,
   MoreHorizontal,
   PackageCheck,
   PanelTop,
+  Pencil,
   Plus,
   Radio,
   RefreshCw,
@@ -55,14 +59,25 @@ import type { StoreOrder } from './lib/integrations'
 export type DashboardProduct = {
   id: number
   name: { ar: string; fr: string }
+  description?: { ar: string; fr: string }
   image: string
   price: number
+  oldPrice?: number
   category: string
+  rating?: number
+  reviews?: number
+  stock?: number
+  active?: boolean
 }
 
 type ProductDraft = {
-  name: string
+  nameAr: string
+  nameFr: string
+  descriptionAr: string
   price: number
+  oldPrice?: number
+  stock: number
+  active: boolean
   category: 'decor' | 'lighting' | 'textiles' | 'fragrance'
   image: string
 }
@@ -78,7 +93,10 @@ type AdminDashboardProps = {
   onLogout: () => void
   onOpenStore: () => void
   onAddProduct: (product: ProductDraft) => void
-  onDeleteProduct: (id: number) => void
+  onUpdateProduct: (id: number, product: ProductDraft) => void
+  onDuplicateProduct: (id: number) => void
+  onDeleteProducts: (ids: number[]) => void
+  onSetProductsStatus: (ids: number[], active: boolean) => void
   onRestoreProducts: () => void
 }
 
@@ -133,7 +151,7 @@ const providerClass: Record<PixelProvider, string> = {
 }
 
 export default function AdminDashboard({
-  lang, logo, products, orders, cartCount, money, onClose, onLogout, onOpenStore, onAddProduct, onDeleteProduct, onRestoreProducts,
+  lang, logo, products, orders, cartCount, money, onClose, onLogout, onOpenStore, onAddProduct, onUpdateProduct, onDuplicateProduct, onDeleteProducts, onSetProductsStatus, onRestoreProducts,
 }: AdminDashboardProps) {
   const ar = lang === 'ar'
   const l = (arabic: string, french: string) => ar ? arabic : french
@@ -141,6 +159,12 @@ export default function AdminDashboard({
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [productSearch, setProductSearch] = useState('')
+  const [productCategory, setProductCategory] = useState('all')
+  const [productStatus, setProductStatus] = useState('all')
+  const [productSort, setProductSort] = useState('newest')
+  const [productView, setProductView] = useState<'table' | 'grid'>('table')
+  const [selectedProductIds, setSelectedProductIds] = useState<number[]>([])
+  const [editingProduct, setEditingProduct] = useState<DashboardProduct | null>(null)
   const [orderSearch, setOrderSearch] = useState('')
   const [addProductOpen, setAddProductOpen] = useState(false)
   const [notice, setNotice] = useState('')
@@ -207,14 +231,15 @@ export default function AdminDashboard({
   const landingViews = pages.reduce((sum, page) => sum + page.views, 0)
   const conversionRate = landingViews ? orders.length / landingViews * 100 : 0
   const todayLabel = new Intl.DateTimeFormat(ar ? 'ar-DZ' : 'fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).format(now)
-
-  const topProducts = useMemo(() => {
+  const productSales = useMemo(() => {
     const sold = new Map<number, number>()
     orders.forEach(order => order.items?.forEach(item => sold.set(item.id, (sold.get(item.id) ?? 0) + (Number(item.quantity) || 0))))
-    return products.map(product => ({ ...product, sold: sold.get(product.id) ?? 0 }))
-      .sort((a, b) => b.sold - a.sold || b.price - a.price)
-      .slice(0, 4)
-  }, [orders, products])
+    return sold
+  }, [orders])
+
+  const topProducts = useMemo(() => products.map(product => ({ ...product, sold: productSales.get(product.id) ?? 0 }))
+    .sort((a, b) => b.sold - a.sold || b.price - a.price)
+    .slice(0, 4), [products, productSales])
 
   const customers = useMemo(() => {
     const unique = new Map<string, { name: string; phone: string; orders: number; spent: number }>()
@@ -231,7 +256,29 @@ export default function AdminDashboard({
     return Array.from(unique.values())
   }, [orders, lang]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filteredProducts = products.filter(product => product.name[lang].toLowerCase().includes(productSearch.toLowerCase()))
+  const filteredProducts = useMemo(() => {
+    const query = productSearch.trim().toLowerCase()
+    const result = products.filter(product => {
+      const matchesSearch = !query || `${product.name.ar} ${product.name.fr} SKU-${String(product.id).padStart(4, '0')}`.toLowerCase().includes(query)
+      const matchesCategory = productCategory === 'all' || product.category === productCategory
+      const isActive = product.active !== false
+      const stock = product.stock ?? 10
+      const matchesStatus = productStatus === 'all' || (productStatus === 'active' && isActive) || (productStatus === 'draft' && !isActive) || (productStatus === 'low' && stock <= 5)
+      return matchesSearch && matchesCategory && matchesStatus
+    })
+    return result.sort((a, b) => {
+      if (productSort === 'price-high') return b.price - a.price
+      if (productSort === 'price-low') return a.price - b.price
+      if (productSort === 'stock-low') return (a.stock ?? 10) - (b.stock ?? 10)
+      if (productSort === 'sales') return (productSales.get(b.id) ?? 0) - (productSales.get(a.id) ?? 0)
+      return b.id - a.id
+    })
+  }, [products, productSearch, productCategory, productStatus, productSort, productSales])
+  const activeProductCount = products.filter(product => product.active !== false).length
+  const lowStockProducts = products.filter(product => (product.stock ?? 10) <= 5)
+  const totalInventory = products.reduce((sum, product) => sum + (product.stock ?? 10), 0)
+  const inventoryValue = products.reduce((sum, product) => sum + product.price * (product.stock ?? 10), 0)
+  const categoryCounts = products.reduce<Record<string, number>>((result, product) => ({ ...result, [product.category]: (result[product.category] ?? 0) + 1 }), {})
   const filteredOrders = orders.filter(order => `${order.id} ${String(order.customer.name ?? '')} ${String(order.customer.phone ?? '')}`.toLowerCase().includes(orderSearch.toLowerCase()))
   const extraStaffCost = Math.max(0, team.length - 25) * 200
 
@@ -309,6 +356,27 @@ export default function AdminDashboard({
   const regenerateKey = () => {
     setApiKey(createApiKey())
     notify(l('تم إنشاء مفتاح API جديد', 'Nouvelle clé API créée'))
+  }
+
+  const toggleProductSelection = (id: number) => setSelectedProductIds(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id])
+  const toggleAllProducts = () => setSelectedProductIds(current => filteredProducts.every(product => current.includes(product.id)) ? current.filter(id => !filteredProducts.some(product => product.id === id)) : [...new Set([...current, ...filteredProducts.map(product => product.id)])])
+  const runBulkProductAction = (action: 'activate' | 'draft' | 'delete') => {
+    if (!selectedProductIds.length) return
+    if (action === 'delete') onDeleteProducts(selectedProductIds)
+    else onSetProductsStatus(selectedProductIds, action === 'activate')
+    setSelectedProductIds([])
+    notify(action === 'delete' ? l('تم حذف المنتجات المحددة', 'Produits supprimés') : l('تم تحديث حالة المنتجات', 'Statut des produits mis à jour'))
+  }
+  const exportProducts = () => {
+    const rows = [['SKU', 'Name AR', 'Name FR', 'Category', 'Price', 'Stock', 'Status'], ...products.map(product => [`SKU-${String(product.id).padStart(4, '0')}`, product.name.ar, product.name.fr, product.category, String(product.price), String(product.stock ?? 10), product.active === false ? 'Draft' : 'Active'])]
+    const csv = rows.map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const url = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' }))
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = 'elegance-products.csv'
+    anchor.click()
+    URL.revokeObjectURL(url)
+    notify(l('تم تصدير ملف المنتجات', 'Catalogue exporté'))
   }
 
   const renderOverview = () => (
@@ -404,15 +472,58 @@ export default function AdminDashboard({
   )
 
   const renderProducts = () => (
-    <section className="dashboard-page">
-      <PageTitle icon={<ShoppingBag />} title={l('إدارة المنتجات', 'Gestion des produits')} text={l('أضف وعدّل منتجاتك دون أي حدود. الرقم في القائمة هو العدد الحالي وليس الحد الأقصى.', 'Ajoutez vos produits sans limites. Le nombre affiché est le total actuel, pas une limite.')} action={<div className="page-action-buttons"><button className="smart-secondary" onClick={() => { onRestoreProducts(); notify(l('تمت استعادة المنتجات الأصلية', 'Produits d’origine restaurés')) }}><RefreshCw /> {l('استعادة الأصلية', 'Restaurer')}</button><button className="smart-primary" onClick={() => setAddProductOpen(true)}><Plus /> {l('منتج جديد', 'Nouveau produit')}</button></div>} />
-      <div className="metric-strip"><Metric label={l('كل المنتجات', 'Tous les produits')} value={products.length} /><Metric label={l('متوفر', 'En stock')} value={products.length} green /><Metric label={l('مخزون منخفض', 'Stock faible')} value={2} warning /><Metric label={l('الحد الأقصى', 'Limite')} value={l('غير محدود', 'Illimité')} /></div>
-      <div className="dashboard-card data-card">
-        <div className="table-tools"><label><Search /><input value={productSearch} onChange={e => setProductSearch(e.target.value)} placeholder={l('ابحث في المنتجات...', 'Rechercher un produit...')} /></label><span>{filteredProducts.length} {l('منتج', 'produits')}</span></div>
-        <div className="admin-product-table">
-          <div className="table-header"><span>{l('المنتج', 'Produit')}</span><span>{l('القسم', 'Catégorie')}</span><span>{l('السعر', 'Prix')}</span><span>{l('الحالة', 'Statut')}</span><span /></div>
-          {filteredProducts.map(product => <div className="product-table-row" key={product.id}><div><img src={product.image} alt="" /><p><b>{product.name[lang]}</b><small>SKU-{String(product.id).padStart(4, '0')}</small></p></div><span>{product.category}</span><strong>{money(product.price)}</strong><em><CircleCheck /> {l('متوفر', 'En stock')}</em><button onClick={() => onDeleteProduct(product.id)} title={l('حذف', 'Supprimer')}><Trash2 /></button></div>)}
+    <section className="dashboard-page products-workspace">
+      <PageTitle icon={<ShoppingBag />} title={l('مركز إدارة المنتجات', 'Centre de gestion des produits')} text={l('تحكم في الكتالوج، المخزون، الأسعار، النشر والأداء من مكان واحد.', 'Gérez catalogue, stock, prix, publication et performances en un seul endroit.')} action={<div className="page-action-buttons product-page-actions"><button className="smart-secondary" onClick={exportProducts}><Download /> {l('تصدير CSV', 'Exporter CSV')}</button><button className="smart-secondary" onClick={() => { onRestoreProducts(); setSelectedProductIds([]); notify(l('تمت استعادة المنتجات الأصلية', 'Produits d’origine restaurés')) }}><RefreshCw /> {l('استعادة', 'Restaurer')}</button><button className="smart-primary" onClick={() => { setEditingProduct(null); setAddProductOpen(true) }}><Plus /> {l('منتج جديد', 'Nouveau produit')}</button></div>} />
+
+      <div className="product-kpi-grid">
+        <ProductKpi icon={<ShoppingBag />} label={l('كل المنتجات', 'Tous les produits')} value={products.length.toString()} detail={l('غير محدود', 'Illimité')} color="navy" />
+        <ProductKpi icon={<CircleCheck />} label={l('منشور في المتجر', 'Produits actifs')} value={activeProductCount.toString()} detail={`${Math.round(activeProductCount / Math.max(1, products.length) * 100)}%`} color="green" />
+        <ProductKpi icon={<CircleAlert />} label={l('مخزون منخفض', 'Stock faible')} value={lowStockProducts.length.toString()} detail={l('5 قطع أو أقل', '5 unités ou moins')} color="orange" />
+        <ProductKpi icon={<Boxes />} label={l('إجمالي المخزون', 'Stock total')} value={totalInventory.toString()} detail={money(inventoryValue)} color="gold" />
+      </div>
+
+      <div className="dashboard-card product-control-panel">
+        <div className="product-toolbar-advanced">
+          <label className="product-admin-search"><Search /><input value={productSearch} onChange={event => setProductSearch(event.target.value)} placeholder={l('ابحث بالاسم أو SKU...', 'Rechercher par nom ou SKU...')} />{productSearch && <button onClick={() => setProductSearch('')}><X /></button>}</label>
+          <select value={productCategory} onChange={event => setProductCategory(event.target.value)}><option value="all">{l('كل الأقسام', 'Toutes catégories')}</option><option value="decor">{l('ديكور', 'Décoration')}</option><option value="lighting">{l('إضاءة', 'Éclairage')}</option><option value="textiles">{l('مفروشات', 'Textile')}</option><option value="fragrance">{l('عطور منزلية', 'Parfums')}</option></select>
+          <select value={productStatus} onChange={event => setProductStatus(event.target.value)}><option value="all">{l('كل الحالات', 'Tous les statuts')}</option><option value="active">{l('منشور', 'Actif')}</option><option value="draft">{l('مسودة', 'Brouillon')}</option><option value="low">{l('مخزون منخفض', 'Stock faible')}</option></select>
+          <select value={productSort} onChange={event => setProductSort(event.target.value)}><option value="newest">{l('الأحدث أولاً', 'Plus récents')}</option><option value="sales">{l('الأكثر مبيعاً', 'Meilleures ventes')}</option><option value="price-high">{l('السعر: الأعلى', 'Prix décroissant')}</option><option value="price-low">{l('السعر: الأقل', 'Prix croissant')}</option><option value="stock-low">{l('المخزون: الأقل', 'Stock croissant')}</option></select>
+          <div className="product-view-switch"><button className={productView === 'table' ? 'active' : ''} onClick={() => setProductView('table')} title={l('جدول', 'Tableau')}><List /></button><button className={productView === 'grid' ? 'active' : ''} onClick={() => setProductView('grid')} title={l('شبكة', 'Grille')}><Grid3X3 /></button></div>
         </div>
+
+        <div className="product-results-head"><p><b>{filteredProducts.length}</b> {l('منتج ظاهر', 'produit(s) affiché(s)')}<span>·</span>{l('العدد الحالي وليس الحد الأقصى', 'Total actuel, aucune limite')}</p>{(productSearch || productCategory !== 'all' || productStatus !== 'all') && <button onClick={() => { setProductSearch(''); setProductCategory('all'); setProductStatus('all') }}><RefreshCw /> {l('مسح الفلاتر', 'Réinitialiser')}</button>}</div>
+
+        {selectedProductIds.length > 0 && <div className="product-bulk-bar"><div><Check /><b>{selectedProductIds.length}</b><span>{l('منتج محدد', 'produit(s) sélectionné(s)')}</span></div><button onClick={() => runBulkProductAction('activate')}><CircleCheck /> {l('نشر', 'Activer')}</button><button onClick={() => runBulkProductAction('draft')}><Eye /> {l('تحويل لمسودة', 'Brouillon')}</button><button className="danger" onClick={() => runBulkProductAction('delete')}><Trash2 /> {l('حذف', 'Supprimer')}</button><button className="bulk-close" onClick={() => setSelectedProductIds([])}><X /></button></div>}
+
+        {productView === 'table' ? <div className="advanced-product-table">
+          <div className="advanced-product-header"><label><input type="checkbox" checked={filteredProducts.length > 0 && filteredProducts.every(product => selectedProductIds.includes(product.id))} onChange={toggleAllProducts} /><i /></label><span>{l('المنتج', 'Produit')}</span><span>SKU</span><span>{l('المخزون', 'Stock')}</span><span>{l('السعر', 'Prix')}</span><span>{l('المبيعات', 'Ventes')}</span><span>{l('الحالة', 'Statut')}</span><span>{l('إجراءات', 'Actions')}</span></div>
+          {filteredProducts.length ? filteredProducts.map(product => {
+            const stock = product.stock ?? 10
+            const sold = productSales.get(product.id) ?? 0
+            const active = product.active !== false
+            return <div className={`advanced-product-row ${selectedProductIds.includes(product.id) ? 'selected' : ''}`} key={product.id}>
+              <label className="product-check"><input type="checkbox" checked={selectedProductIds.includes(product.id)} onChange={() => toggleProductSelection(product.id)} /><i /></label>
+              <div className="advanced-product-identity"><img src={product.image} alt="" /><div><b>{product.name[lang]}</b><span>{product.name[ar ? 'fr' : 'ar']}</span><em>{product.category}</em></div></div>
+              <code>SKU-{String(product.id).padStart(4, '0')}</code>
+              <div className={`stock-cell ${stock <= 5 ? 'low' : ''}`}><div><b>{stock}</b><span>{stock <= 5 ? l('منخفض', 'Faible') : l('متوفر', 'En stock')}</span></div><i><span style={{ width: `${Math.min(100, stock / 25 * 100)}%` }} /></i></div>
+              <div className="price-cell"><b>{money(product.price)}</b>{product.oldPrice && <del>{money(product.oldPrice)}</del>}</div>
+              <div className="sales-cell"><b>{sold}</b><span>{money(sold * product.price)}</span></div>
+              <button className={`product-status-pill ${active ? 'active' : 'draft'}`} onClick={() => onSetProductsStatus([product.id], !active)}><i />{active ? l('منشور', 'Actif') : l('مسودة', 'Brouillon')}</button>
+              <div className="product-row-actions"><button onClick={() => { setEditingProduct(product); setAddProductOpen(true) }} title={l('تعديل', 'Modifier')}><Pencil /></button><button onClick={() => onDuplicateProduct(product.id)} title={l('نسخ', 'Dupliquer')}><Copy /></button><button className="delete" onClick={() => onDeleteProducts([product.id])} title={l('حذف', 'Supprimer')}><Trash2 /></button></div>
+            </div>
+          }) : <DashboardEmpty icon={<Search />} text={l('لا توجد منتجات مطابقة. غيّر الفلاتر أو أضف منتجاً جديداً.', 'Aucun produit correspondant. Modifiez les filtres ou ajoutez un produit.')} />}
+        </div> : <div className="admin-product-grid">{filteredProducts.length ? filteredProducts.map(product => {
+          const active = product.active !== false
+          const stock = product.stock ?? 10
+          const sold = productSales.get(product.id) ?? 0
+          return <article className={`admin-product-card ${selectedProductIds.includes(product.id) ? 'selected' : ''}`} key={product.id}><div className="admin-product-card-image"><img src={product.image} alt="" /><label className="product-check"><input type="checkbox" checked={selectedProductIds.includes(product.id)} onChange={() => toggleProductSelection(product.id)} /><i /></label><span className={active ? 'active' : 'draft'}>{active ? l('منشور', 'Actif') : l('مسودة', 'Brouillon')}</span><div><button onClick={() => { setEditingProduct(product); setAddProductOpen(true) }}><Pencil /></button><button onClick={() => onDuplicateProduct(product.id)}><Copy /></button></div></div><div className="admin-product-card-copy"><small>{product.category} · SKU-{String(product.id).padStart(4, '0')}</small><h3>{product.name[lang]}</h3><div><p><b>{money(product.price)}</b>{product.oldPrice && <del>{money(product.oldPrice)}</del>}</p><span className={stock <= 5 ? 'low' : ''}>{stock} {l('في المخزون', 'en stock')}</span></div><footer><span><TrendingUp /> {sold} {l('مباع', 'vendu')}</span><button onClick={() => onSetProductsStatus([product.id], !active)}>{active ? l('إيقاف', 'Désactiver') : l('نشر', 'Publier')}</button></footer></div></article>
+        }) : <DashboardEmpty icon={<Search />} text={l('لا توجد منتجات مطابقة.', 'Aucun produit correspondant.')} />}</div>}
+      </div>
+
+      <div className="product-insights-grid">
+        <section className="dashboard-card category-insight-card"><CardHead title={l('توزيع الكتالوج', 'Répartition du catalogue')} subtitle={`${products.length} ${l('منتج', 'produits')}`} action={<BarChart3 />} /><div className="category-bars">{[['decor', l('ديكور', 'Décoration'), 'gold'], ['lighting', l('إضاءة', 'Éclairage'), 'blue'], ['textiles', l('مفروشات', 'Textile'), 'purple'], ['fragrance', l('عطور', 'Parfums'), 'green']].map(([key, label, color]) => <div key={key}><p><span><i className={color} />{label}</span><b>{categoryCounts[key] ?? 0}</b></p><div><i className={color} style={{ width: `${(categoryCounts[key] ?? 0) / Math.max(1, products.length) * 100}%` }} /></div></div>)}</div></section>
+        <section className="dashboard-card inventory-alert-card"><CardHead title={l('تنبيهات المخزون', 'Alertes de stock')} subtitle={`${lowStockProducts.length} ${l('تحتاج متابعة', 'à surveiller')}`} action={<CircleAlert />} />{lowStockProducts.length ? <div>{lowStockProducts.slice(0, 4).map(product => <button key={product.id} onClick={() => { setEditingProduct(product); setAddProductOpen(true) }}><img src={product.image} alt="" /><p><b>{product.name[lang]}</b><span>SKU-{String(product.id).padStart(4, '0')}</span></p><em>{product.stock ?? 10} {l('متبقي', 'restant')}</em><ChevronLeft /></button>)}</div> : <DashboardEmpty icon={<CircleCheck />} text={l('المخزون في حالة ممتازة.', 'Le stock est en excellent état.')} />}</section>
+        <section className="dashboard-card product-performance-card"><CardHead title={l('أداء المنتجات', 'Performance produits')} subtitle={l('من الطلبات الحقيقية', 'Selon les commandes')} action={<TrendingUp />} /><div className="performance-highlight"><div><Sparkles /><b>{topProducts[0]?.name[lang] ?? '—'}</b><span>{l('المنتج الأعلى أداءً', 'Produit le plus performant')}</span></div><strong>{productSales.get(topProducts[0]?.id ?? -1) ?? 0}<small>{l('مباع', 'vendu')}</small></strong></div><div className="performance-stats"><p><span>{l('قيمة المخزون', 'Valeur du stock')}</span><b>{money(inventoryValue)}</b></p><p><span>{l('متوسط السعر', 'Prix moyen')}</span><b>{money(products.length ? products.reduce((sum, product) => sum + product.price, 0) / products.length : 0)}</b></p></div></section>
       </div>
     </section>
   )
@@ -531,10 +642,14 @@ export default function AdminDashboard({
         <div className="smart-scroll">{tabContent[tab]()}</div>
       </main>
 
-      {addProductOpen && <AddProductModal ar={ar} products={products} onClose={() => setAddProductOpen(false)} onAdd={product => { onAddProduct(product); setAddProductOpen(false); notify(l('تمت إضافة المنتج بنجاح', 'Produit ajouté avec succès')) }} />}
+      {addProductOpen && <ProductEditorModal ar={ar} products={products} product={editingProduct} onClose={() => { setAddProductOpen(false); setEditingProduct(null) }} onSave={draft => { if (editingProduct) onUpdateProduct(editingProduct.id, draft); else onAddProduct(draft); setAddProductOpen(false); setEditingProduct(null); notify(editingProduct ? l('تم تحديث المنتج بنجاح', 'Produit mis à jour') : l('تمت إضافة المنتج بنجاح', 'Produit ajouté avec succès')) }} />}
       {notice && <div className="dashboard-toast"><CircleCheck /> {notice}</div>}
     </div>
   )
+}
+
+function ProductKpi({ icon, label, value, detail, color }: { icon: ReactNode; label: string; value: string; detail: string; color: string }) {
+  return <article className="product-kpi dashboard-card"><div className={color}>{icon}</div><p><span>{label}</span><b>{value}</b><small>{detail}</small></p></article>
 }
 
 function ConnectionStatus({ label, value, active }: { label: string; value: string; active: boolean }) {
@@ -602,16 +717,38 @@ function MessageIcon() {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z" /><path d="M8 9h8M8 13h5" /></svg>
 }
 
-function AddProductModal({ ar, products, onClose, onAdd }: { ar: boolean; products: DashboardProduct[]; onClose: () => void; onAdd: (product: ProductDraft) => void }) {
+function ProductEditorModal({ ar, products, product, onClose, onSave }: { ar: boolean; products: DashboardProduct[]; product: DashboardProduct | null; onClose: () => void; onSave: (product: ProductDraft) => void }) {
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const data = new FormData(event.currentTarget)
-    onAdd({
-      name: String(data.get('name')),
+    const oldPrice = Number(data.get('oldPrice'))
+    onSave({
+      nameAr: String(data.get('nameAr')).trim(),
+      nameFr: String(data.get('nameFr')).trim() || String(data.get('nameAr')).trim(),
+      descriptionAr: String(data.get('descriptionAr')).trim(),
       price: Number(data.get('price')),
+      oldPrice: oldPrice > 0 ? oldPrice : undefined,
+      stock: Math.max(0, Number(data.get('stock')) || 0),
+      active: String(data.get('status')) === 'active',
       category: String(data.get('category')) as ProductDraft['category'],
       image: String(data.get('image')),
     })
   }
-  return <div className="dashboard-inner-overlay" onMouseDown={onClose}><form className="add-product-modal" onSubmit={submit} onMouseDown={e => e.stopPropagation()}><div className="add-modal-head"><div><Sparkles /><p><b>{ar ? 'إضافة منتج جديد' : 'Nouveau produit'}</b><span>{ar ? 'يمكنك إضافة عدد غير محدود' : 'Ajoutez des produits sans limites'}</span></p></div><button type="button" onClick={onClose}><X /></button></div><label><span>{ar ? 'اسم المنتج' : 'Nom du produit'}</span><input name="name" required /></label><div className="add-form-grid"><label><span>{ar ? 'السعر (د.ج)' : 'Prix (DA)'}</span><input name="price" type="number" min="0" required /></label><label><span>{ar ? 'القسم' : 'Catégorie'}</span><select name="category"><option value="decor">Décor</option><option value="lighting">Éclairage</option><option value="textiles">Textile</option><option value="fragrance">Parfum</option></select></label></div><label><span>{ar ? 'صورة المنتج المميزة بالشعار' : 'Image produit avec logo'}</span><select name="image">{products.slice(0, 6).map(product => <option key={product.id} value={product.image}>{product.name[ar ? 'ar' : 'fr']}</option>)}</select></label><div className="add-product-note"><ShieldCheck /> {ar ? 'سيُحفظ المنتج مباشرة في كتالوج المتجر.' : 'Le produit sera enregistré dans votre catalogue.'}</div><button className="smart-primary full-add" type="submit"><Plus /> {ar ? 'إضافة المنتج' : 'Ajouter le produit'}</button></form></div>
+  const imageChoices = Array.from(new Map(products.map(item => [item.image, item])).values())
+  return <div className="dashboard-inner-overlay product-editor-overlay" onMouseDown={onClose}>
+    <form className="add-product-modal product-editor-modal" onSubmit={submit} onMouseDown={event => event.stopPropagation()}>
+      <div className="add-modal-head"><div><Sparkles /><p><b>{product ? (ar ? 'تعديل المنتج' : 'Modifier le produit') : (ar ? 'إضافة منتج جديد' : 'Nouveau produit')}</b><span>{ar ? 'البيانات تظهر مباشرة في كتالوج المتجر' : 'Les changements apparaissent dans le catalogue'}</span></p></div><button type="button" onClick={onClose}><X /></button></div>
+      <div className="editor-form-scroll">
+        <div className="editor-section-title"><span>01</span><p><b>{ar ? 'المعلومات الأساسية' : 'Informations principales'}</b><small>{ar ? 'اسم المنتج ووصفه' : 'Nom et description'}</small></p></div>
+        <div className="add-form-grid"><label><span>{ar ? 'اسم المنتج بالعربية' : 'Nom en arabe'}</span><input name="nameAr" defaultValue={product?.name.ar ?? ''} required dir="rtl" /></label><label><span>{ar ? 'الاسم بالفرنسية' : 'Nom en français'}</span><input name="nameFr" defaultValue={product?.name.fr ?? ''} dir="ltr" /></label></div>
+        <label><span>{ar ? 'وصف مختصر' : 'Description courte'}</span><textarea name="descriptionAr" defaultValue={product?.description?.ar ?? ''} rows={3} /></label>
+        <div className="editor-section-title"><span>02</span><p><b>{ar ? 'السعر والمخزون' : 'Prix et stock'}</b><small>{ar ? 'تحكم في التسعير والتوفر' : 'Tarification et disponibilité'}</small></p></div>
+        <div className="editor-three-grid"><label><span>{ar ? 'السعر (د.ج)' : 'Prix (DA)'}</span><input name="price" type="number" min="0" defaultValue={product?.price ?? ''} required /></label><label><span>{ar ? 'السعر قبل التخفيض' : 'Prix barré'}</span><input name="oldPrice" type="number" min="0" defaultValue={product?.oldPrice ?? ''} /></label><label><span>{ar ? 'كمية المخزون' : 'Stock'}</span><input name="stock" type="number" min="0" defaultValue={product?.stock ?? 10} required /></label></div>
+        <div className="editor-section-title"><span>03</span><p><b>{ar ? 'التصنيف والنشر' : 'Classement et publication'}</b><small>{ar ? 'حدد مكان ظهور المنتج' : 'Choisissez où afficher le produit'}</small></p></div>
+        <div className="add-form-grid"><label><span>{ar ? 'القسم' : 'Catégorie'}</span><select name="category" defaultValue={product?.category ?? 'decor'}><option value="decor">{ar ? 'ديكور' : 'Décoration'}</option><option value="lighting">{ar ? 'إضاءة' : 'Éclairage'}</option><option value="textiles">{ar ? 'مفروشات' : 'Textile'}</option><option value="fragrance">{ar ? 'عطور منزلية' : 'Parfums'}</option></select></label><label><span>{ar ? 'حالة المنتج' : 'Statut'}</span><select name="status" defaultValue={product?.active === false ? 'draft' : 'active'}><option value="active">{ar ? 'منشور في المتجر' : 'Actif dans la boutique'}</option><option value="draft">{ar ? 'مسودة مخفية' : 'Brouillon masqué'}</option></select></label></div>
+        <label><span>{ar ? 'صورة المنتج المميزة بالشعار' : 'Image produit avec logo'}</span><select name="image" defaultValue={product?.image ?? imageChoices[0]?.image}>{imageChoices.map(item => <option key={item.image} value={item.image}>{item.name[ar ? 'ar' : 'fr']}</option>)}</select></label>
+      </div>
+      <div className="editor-modal-footer"><div className="add-product-note"><ShieldCheck /> {ar ? 'يُحفظ التعديل مباشرة في هذا المتصفح.' : 'Les changements sont enregistrés dans ce navigateur.'}</div><button type="button" className="smart-secondary" onClick={onClose}>{ar ? 'إلغاء' : 'Annuler'}</button><button className="smart-primary full-add" type="submit"><Check /> {product ? (ar ? 'حفظ التغييرات' : 'Enregistrer') : (ar ? 'إضافة المنتج' : 'Ajouter')}</button></div>
+    </form>
+  </div>
 }

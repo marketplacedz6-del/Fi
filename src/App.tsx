@@ -85,6 +85,8 @@ type Product = {
   rating: number
   reviews: number
   badge?: Localized
+  stock?: number
+  active?: boolean
 }
 
 type CartItem = { id: number; quantity: number }
@@ -103,6 +105,8 @@ const defaultProducts: Product[] = [
     oldPrice: 8200,
     rating: 4.9,
     reviews: 48,
+    stock: 12,
+    active: true,
     badge: { ar: 'جديد', fr: 'Nouveau' },
   },
   {
@@ -118,6 +122,8 @@ const defaultProducts: Product[] = [
     oldPrice: 9900,
     rating: 4.8,
     reviews: 72,
+    stock: 8,
+    active: true,
     badge: { ar: 'الأكثر طلباً', fr: 'Best-seller' },
   },
   {
@@ -132,6 +138,8 @@ const defaultProducts: Product[] = [
     price: 3200,
     rating: 4.9,
     reviews: 91,
+    stock: 24,
+    active: true,
     badge: { ar: 'مفضل', fr: 'Coup de cœur' },
   },
   {
@@ -147,6 +155,8 @@ const defaultProducts: Product[] = [
     oldPrice: 14900,
     rating: 4.7,
     reviews: 36,
+    stock: 4,
+    active: true,
     badge: { ar: 'حصري', fr: 'Exclusif' },
   },
   {
@@ -161,6 +171,8 @@ const defaultProducts: Product[] = [
     price: 5400,
     rating: 4.8,
     reviews: 55,
+    stock: 15,
+    active: true,
   },
   {
     id: 6,
@@ -174,6 +186,8 @@ const defaultProducts: Product[] = [
     price: 18900,
     rating: 4.9,
     reviews: 29,
+    stock: 3,
+    active: true,
     badge: { ar: 'كمية محدودة', fr: 'Série limitée' },
   },
 ]
@@ -363,6 +377,7 @@ function App() {
     const query = search.trim().toLowerCase()
     const filtered = catalogProducts.filter(product => {
       const matchesCategory = category === 'all' || product.category === category
+      if (product.active === false) return false
       const text = `${product.name.ar} ${product.name.fr} ${product.description.ar} ${product.description.fr}`.toLowerCase()
       return matchesCategory && (!query || text.includes(query))
     })
@@ -453,28 +468,59 @@ function App() {
     setToast(isAr ? 'تم تسجيل الخروج' : 'Déconnexion réussie')
   }
 
-  const addDashboardProduct = (draft: { name: string; price: number; category: Exclude<Category, 'all'>; image: string }) => {
+  type DashboardProductDraft = { nameAr: string; nameFr: string; descriptionAr: string; price: number; oldPrice?: number; stock: number; active: boolean; category: Exclude<Category, 'all'>; image: string }
+
+  const addDashboardProduct = (draft: DashboardProductDraft) => {
     setCatalogProducts(current => [...current, {
       id: Math.max(0, ...current.map(product => product.id)) + 1,
-      name: { ar: draft.name, fr: draft.name },
+      name: { ar: draft.nameAr, fr: draft.nameFr || draft.nameAr },
       description: {
-        ar: 'منتج جديد من مجموعة Elegance Home & Style، اختير بعناية ليضيف لمسة راقية إلى بيتك.',
-        fr: 'Une nouveauté Elegance Home & Style, choisie pour apporter une touche raffinée à votre intérieur.',
+        ar: draft.descriptionAr || 'منتج جديد من مجموعة Elegance Home & Style، اختير بعناية ليضيف لمسة راقية إلى بيتك.',
+        fr: draft.descriptionAr || 'Une nouveauté Elegance Home & Style, choisie pour apporter une touche raffinée à votre intérieur.',
       },
       category: draft.category,
       image: draft.image,
       price: draft.price,
+      oldPrice: draft.oldPrice,
+      stock: draft.stock,
+      active: draft.active,
       rating: 5,
       reviews: 0,
       badge: { ar: 'جديد', fr: 'Nouveau' },
     }])
   }
 
-  const deleteDashboardProduct = (id: number) => {
-    const accepted = window.confirm(isAr ? 'هل تريد حذف هذا المنتج من المتجر؟' : 'Supprimer ce produit de la boutique ?')
+  const updateDashboardProduct = (id: number, draft: DashboardProductDraft) => {
+    setCatalogProducts(current => current.map(product => product.id === id ? {
+      ...product,
+      name: { ar: draft.nameAr, fr: draft.nameFr || draft.nameAr },
+      description: { ar: draft.descriptionAr || product.description.ar, fr: draft.descriptionAr || product.description.fr },
+      category: draft.category,
+      image: draft.image,
+      price: draft.price,
+      oldPrice: draft.oldPrice,
+      stock: draft.stock,
+      active: draft.active,
+    } : product))
+  }
+
+  const duplicateDashboardProduct = (id: number) => {
+    setCatalogProducts(current => {
+      const source = current.find(product => product.id === id)
+      if (!source) return current
+      return [...current, { ...source, id: Math.max(0, ...current.map(product => product.id)) + 1, name: { ar: `${source.name.ar} — نسخة`, fr: `${source.name.fr} — Copie` }, active: false, badge: { ar: 'نسخة', fr: 'Copie' } }]
+    })
+  }
+
+  const deleteDashboardProducts = (ids: number[]) => {
+    const accepted = window.confirm(isAr ? `هل تريد حذف ${ids.length} منتج من المتجر؟` : `Supprimer ${ids.length} produit(s) ?`)
     if (!accepted) return
-    setCatalogProducts(current => current.filter(product => product.id !== id))
-    setCart(current => current.filter(item => item.id !== id))
+    setCatalogProducts(current => current.filter(product => !ids.includes(product.id)))
+    setCart(current => current.filter(item => !ids.includes(item.id)))
+  }
+
+  const setDashboardProductsStatus = (ids: number[], active: boolean) => {
+    setCatalogProducts(current => current.map(product => ids.includes(product.id) ? { ...product, active } : product))
   }
 
   const goToProducts = (selectedCategory?: Category) => {
@@ -900,7 +946,10 @@ function App() {
               onLogout={logout}
               onOpenStore={() => { lockDashboard(); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
               onAddProduct={addDashboardProduct}
-              onDeleteProduct={deleteDashboardProduct}
+              onUpdateProduct={updateDashboardProduct}
+              onDuplicateProduct={duplicateDashboardProduct}
+              onDeleteProducts={deleteDashboardProducts}
+              onSetProductsStatus={setDashboardProductsStatus}
               onRestoreProducts={() => setCatalogProducts(defaultProducts)}
             />
           </DashboardErrorBoundary>
