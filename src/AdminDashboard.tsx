@@ -22,6 +22,7 @@ import {
   Globe2,
   Grid3X3,
   Headphones,
+  ImagePlus,
   KeyRound,
   Languages,
   LayoutDashboard,
@@ -53,7 +54,9 @@ import {
   X,
   Zap,
 } from 'lucide-react'
+import StoredImage from './StoredImage'
 import { registerRuntimePixel } from './lib/analytics'
+import { storeProductImage } from './lib/imageStore'
 import type { StoreOrder } from './lib/integrations'
 
 export type DashboardProduct = {
@@ -68,6 +71,11 @@ export type DashboardProduct = {
   reviews?: number
   stock?: number
   active?: boolean
+  images?: string[]
+  cost?: number
+  sku?: string
+  featured?: boolean
+  tags?: string[]
 }
 
 type ProductDraft = {
@@ -78,8 +86,13 @@ type ProductDraft = {
   oldPrice?: number
   stock: number
   active: boolean
-  category: 'decor' | 'lighting' | 'textiles' | 'fragrance'
+  category: 'decor' | 'lighting' | 'textiles' | 'fragrance' | 'tableware' | 'kitchen' | 'organization' | 'gifts'
   image: string
+  images: string[]
+  cost?: number
+  sku?: string
+  featured: boolean
+  tags: string[]
 }
 
 type AdminDashboardProps = {
@@ -146,6 +159,8 @@ const initialTeam: TeamMember[] = [
   { id: 1, name: 'Walid', email: 'walid@gmail.com', role: 'المالك', active: true },
 ]
 
+const productSku = (product: DashboardProduct) => product.sku?.trim() || `SKU-${String(product.id).padStart(4, '0')}`
+
 const providerClass: Record<PixelProvider, string> = {
   Meta: 'meta', TikTok: 'tiktok', Google: 'google', Pinterest: 'pinterest', Snapchat: 'snapchat',
 }
@@ -155,6 +170,10 @@ export default function AdminDashboard({
 }: AdminDashboardProps) {
   const ar = lang === 'ar'
   const l = (arabic: string, french: string) => ar ? arabic : french
+  const categoryNames: Record<string, string> = {
+    decor: l('ديكور', 'Décoration'), lighting: l('إضاءة', 'Éclairage'), textiles: l('مفروشات', 'Textile'), fragrance: l('عطور منزلية', 'Parfums'),
+    tableware: l('أناقة المائدة', 'Art de table'), kitchen: l('المطبخ', 'Cuisine'), organization: l('تنظيم المنزل', 'Rangement'), gifts: l('هدايا', 'Cadeaux'),
+  }
   const [tab, setTab] = useState<Tab>('overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -259,7 +278,7 @@ export default function AdminDashboard({
   const filteredProducts = useMemo(() => {
     const query = productSearch.trim().toLowerCase()
     const result = products.filter(product => {
-      const matchesSearch = !query || `${product.name.ar} ${product.name.fr} SKU-${String(product.id).padStart(4, '0')}`.toLowerCase().includes(query)
+      const matchesSearch = !query || `${product.name.ar} ${product.name.fr} ${productSku(product)}`.toLowerCase().includes(query)
       const matchesCategory = productCategory === 'all' || product.category === productCategory
       const isActive = product.active !== false
       const stock = product.stock ?? 10
@@ -368,7 +387,7 @@ export default function AdminDashboard({
     notify(action === 'delete' ? l('تم حذف المنتجات المحددة', 'Produits supprimés') : l('تم تحديث حالة المنتجات', 'Statut des produits mis à jour'))
   }
   const exportProducts = () => {
-    const rows = [['SKU', 'Name AR', 'Name FR', 'Category', 'Price', 'Stock', 'Status'], ...products.map(product => [`SKU-${String(product.id).padStart(4, '0')}`, product.name.ar, product.name.fr, product.category, String(product.price), String(product.stock ?? 10), product.active === false ? 'Draft' : 'Active'])]
+    const rows = [['SKU', 'Name AR', 'Name FR', 'Category', 'Price', 'Stock', 'Status'], ...products.map(product => [`${productSku(product)}`, product.name.ar, product.name.fr, product.category, String(product.price), String(product.stock ?? 10), product.active === false ? 'Draft' : 'Active'])]
     const csv = rows.map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(',')).join('\n')
     const url = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' }))
     const anchor = document.createElement('a')
@@ -454,7 +473,7 @@ export default function AdminDashboard({
 
         <section className="dashboard-card top-products-card">
           <CardHead title={l('أفضل المنتجات', 'Meilleurs produits')} subtitle={l('حسب الكمية المباعة', 'Selon les quantités vendues')} action={<button onClick={() => switchTab('products')}>{l('الكتالوج', 'Catalogue')} {ar ? <ChevronLeft /> : <ChevronRight />}</button>} />
-          <div className="top-products-list">{topProducts.map((product, index) => <div className="top-product-row" key={product.id}><span>{index + 1}</span><img src={product.image} alt="" /><p><b>{product.name[lang]}</b><small>{product.sold} {l('مباع', 'vendu(s)')}</small></p><strong>{money(product.price * product.sold)}</strong></div>)}</div>
+          <div className="top-products-list">{topProducts.map((product, index) => <div className="top-product-row" key={product.id}><span>{index + 1}</span><StoredImage src={product.image} alt="" /><p><b>{product.name[lang]}</b><small>{product.sold} {l('مباع', 'vendu(s)')}</small></p><strong>{money(product.price * product.sold)}</strong></div>)}</div>
         </section>
 
         <section className="dashboard-card quick-center-card">
@@ -485,7 +504,7 @@ export default function AdminDashboard({
       <div className="dashboard-card product-control-panel">
         <div className="product-toolbar-advanced">
           <label className="product-admin-search"><Search /><input value={productSearch} onChange={event => setProductSearch(event.target.value)} placeholder={l('ابحث بالاسم أو SKU...', 'Rechercher par nom ou SKU...')} />{productSearch && <button onClick={() => setProductSearch('')}><X /></button>}</label>
-          <select value={productCategory} onChange={event => setProductCategory(event.target.value)}><option value="all">{l('كل الأقسام', 'Toutes catégories')}</option><option value="decor">{l('ديكور', 'Décoration')}</option><option value="lighting">{l('إضاءة', 'Éclairage')}</option><option value="textiles">{l('مفروشات', 'Textile')}</option><option value="fragrance">{l('عطور منزلية', 'Parfums')}</option></select>
+          <select value={productCategory} onChange={event => setProductCategory(event.target.value)}><option value="all">{l('كل الأقسام', 'Toutes catégories')}</option><option value="decor">{l('ديكور', 'Décoration')}</option><option value="lighting">{l('إضاءة', 'Éclairage')}</option><option value="textiles">{l('مفروشات', 'Textile')}</option><option value="fragrance">{l('عطور منزلية', 'Parfums')}</option><option value="tableware">{l('أناقة المائدة', 'Art de table')}</option><option value="kitchen">{l('المطبخ', 'Cuisine')}</option><option value="organization">{l('تنظيم المنزل', 'Rangement')}</option><option value="gifts">{l('هدايا', 'Cadeaux')}</option></select>
           <select value={productStatus} onChange={event => setProductStatus(event.target.value)}><option value="all">{l('كل الحالات', 'Tous les statuts')}</option><option value="active">{l('منشور', 'Actif')}</option><option value="draft">{l('مسودة', 'Brouillon')}</option><option value="low">{l('مخزون منخفض', 'Stock faible')}</option></select>
           <select value={productSort} onChange={event => setProductSort(event.target.value)}><option value="newest">{l('الأحدث أولاً', 'Plus récents')}</option><option value="sales">{l('الأكثر مبيعاً', 'Meilleures ventes')}</option><option value="price-high">{l('السعر: الأعلى', 'Prix décroissant')}</option><option value="price-low">{l('السعر: الأقل', 'Prix croissant')}</option><option value="stock-low">{l('المخزون: الأقل', 'Stock croissant')}</option></select>
           <div className="product-view-switch"><button className={productView === 'table' ? 'active' : ''} onClick={() => setProductView('table')} title={l('جدول', 'Tableau')}><List /></button><button className={productView === 'grid' ? 'active' : ''} onClick={() => setProductView('grid')} title={l('شبكة', 'Grille')}><Grid3X3 /></button></div>
@@ -503,10 +522,10 @@ export default function AdminDashboard({
             const active = product.active !== false
             return <div className={`advanced-product-row ${selectedProductIds.includes(product.id) ? 'selected' : ''}`} key={product.id}>
               <label className="product-check"><input type="checkbox" checked={selectedProductIds.includes(product.id)} onChange={() => toggleProductSelection(product.id)} /><i /></label>
-              <div className="advanced-product-identity"><img src={product.image} alt="" /><div><b>{product.name[lang]}</b><span>{product.name[ar ? 'fr' : 'ar']}</span><em>{product.category}</em></div></div>
-              <code>SKU-{String(product.id).padStart(4, '0')}</code>
+              <div className="advanced-product-identity"><StoredImage src={product.image} alt="" /><div><b>{product.name[lang]}</b><span>{product.name[ar ? 'fr' : 'ar']}</span><em>{categoryNames[product.category] ?? product.category}</em></div></div>
+              <code>{productSku(product)}</code>
               <div className={`stock-cell ${stock <= 5 ? 'low' : ''}`}><div><b>{stock}</b><span>{stock <= 5 ? l('منخفض', 'Faible') : l('متوفر', 'En stock')}</span></div><i><span style={{ width: `${Math.min(100, stock / 25 * 100)}%` }} /></i></div>
-              <div className="price-cell"><b>{money(product.price)}</b>{product.oldPrice && <del>{money(product.oldPrice)}</del>}</div>
+              <div className="price-cell"><b>{money(product.price)}</b>{product.oldPrice && <del>{money(product.oldPrice)}</del>}{product.cost && <small>{Math.round((product.price - product.cost) / Math.max(1, product.price) * 100)}% {l('هامش', 'marge')}</small>}</div>
               <div className="sales-cell"><b>{sold}</b><span>{money(sold * product.price)}</span></div>
               <button className={`product-status-pill ${active ? 'active' : 'draft'}`} onClick={() => onSetProductsStatus([product.id], !active)}><i />{active ? l('منشور', 'Actif') : l('مسودة', 'Brouillon')}</button>
               <div className="product-row-actions"><button onClick={() => { setEditingProduct(product); setAddProductOpen(true) }} title={l('تعديل', 'Modifier')}><Pencil /></button><button onClick={() => onDuplicateProduct(product.id)} title={l('نسخ', 'Dupliquer')}><Copy /></button><button className="delete" onClick={() => onDeleteProducts([product.id])} title={l('حذف', 'Supprimer')}><Trash2 /></button></div>
@@ -516,13 +535,13 @@ export default function AdminDashboard({
           const active = product.active !== false
           const stock = product.stock ?? 10
           const sold = productSales.get(product.id) ?? 0
-          return <article className={`admin-product-card ${selectedProductIds.includes(product.id) ? 'selected' : ''}`} key={product.id}><div className="admin-product-card-image"><img src={product.image} alt="" /><label className="product-check"><input type="checkbox" checked={selectedProductIds.includes(product.id)} onChange={() => toggleProductSelection(product.id)} /><i /></label><span className={active ? 'active' : 'draft'}>{active ? l('منشور', 'Actif') : l('مسودة', 'Brouillon')}</span><div><button onClick={() => { setEditingProduct(product); setAddProductOpen(true) }}><Pencil /></button><button onClick={() => onDuplicateProduct(product.id)}><Copy /></button></div></div><div className="admin-product-card-copy"><small>{product.category} · SKU-{String(product.id).padStart(4, '0')}</small><h3>{product.name[lang]}</h3><div><p><b>{money(product.price)}</b>{product.oldPrice && <del>{money(product.oldPrice)}</del>}</p><span className={stock <= 5 ? 'low' : ''}>{stock} {l('في المخزون', 'en stock')}</span></div><footer><span><TrendingUp /> {sold} {l('مباع', 'vendu')}</span><button onClick={() => onSetProductsStatus([product.id], !active)}>{active ? l('إيقاف', 'Désactiver') : l('نشر', 'Publier')}</button></footer></div></article>
+          return <article className={`admin-product-card ${selectedProductIds.includes(product.id) ? 'selected' : ''}`} key={product.id}><div className="admin-product-card-image"><StoredImage src={product.image} alt="" /><label className="product-check"><input type="checkbox" checked={selectedProductIds.includes(product.id)} onChange={() => toggleProductSelection(product.id)} /><i /></label><span className={active ? 'active' : 'draft'}>{active ? l('منشور', 'Actif') : l('مسودة', 'Brouillon')}</span><em className="image-count-badge"><ImagePlus />{product.images?.length || 1}</em><div><button onClick={() => { setEditingProduct(product); setAddProductOpen(true) }}><Pencil /></button><button onClick={() => onDuplicateProduct(product.id)}><Copy /></button></div></div><div className="admin-product-card-copy"><small>{categoryNames[product.category] ?? product.category} · {productSku(product)}</small><h3>{product.name[lang]}</h3><div><p><b>{money(product.price)}</b>{product.oldPrice && <del>{money(product.oldPrice)}</del>}</p><span className={stock <= 5 ? 'low' : ''}>{stock} {l('في المخزون', 'en stock')}</span></div><footer><span><TrendingUp /> {sold} {l('مباع', 'vendu')}</span><button onClick={() => onSetProductsStatus([product.id], !active)}>{active ? l('إيقاف', 'Désactiver') : l('نشر', 'Publier')}</button></footer></div></article>
         }) : <DashboardEmpty icon={<Search />} text={l('لا توجد منتجات مطابقة.', 'Aucun produit correspondant.')} />}</div>}
       </div>
 
       <div className="product-insights-grid">
-        <section className="dashboard-card category-insight-card"><CardHead title={l('توزيع الكتالوج', 'Répartition du catalogue')} subtitle={`${products.length} ${l('منتج', 'produits')}`} action={<BarChart3 />} /><div className="category-bars">{[['decor', l('ديكور', 'Décoration'), 'gold'], ['lighting', l('إضاءة', 'Éclairage'), 'blue'], ['textiles', l('مفروشات', 'Textile'), 'purple'], ['fragrance', l('عطور', 'Parfums'), 'green']].map(([key, label, color]) => <div key={key}><p><span><i className={color} />{label}</span><b>{categoryCounts[key] ?? 0}</b></p><div><i className={color} style={{ width: `${(categoryCounts[key] ?? 0) / Math.max(1, products.length) * 100}%` }} /></div></div>)}</div></section>
-        <section className="dashboard-card inventory-alert-card"><CardHead title={l('تنبيهات المخزون', 'Alertes de stock')} subtitle={`${lowStockProducts.length} ${l('تحتاج متابعة', 'à surveiller')}`} action={<CircleAlert />} />{lowStockProducts.length ? <div>{lowStockProducts.slice(0, 4).map(product => <button key={product.id} onClick={() => { setEditingProduct(product); setAddProductOpen(true) }}><img src={product.image} alt="" /><p><b>{product.name[lang]}</b><span>SKU-{String(product.id).padStart(4, '0')}</span></p><em>{product.stock ?? 10} {l('متبقي', 'restant')}</em><ChevronLeft /></button>)}</div> : <DashboardEmpty icon={<CircleCheck />} text={l('المخزون في حالة ممتازة.', 'Le stock est en excellent état.')} />}</section>
+        <section className="dashboard-card category-insight-card"><CardHead title={l('توزيع الكتالوج', 'Répartition du catalogue')} subtitle={`${products.length} ${l('منتج', 'produits')}`} action={<BarChart3 />} /><div className="category-bars">{[['decor', l('ديكور', 'Décoration'), 'gold'], ['lighting', l('إضاءة', 'Éclairage'), 'blue'], ['textiles', l('مفروشات', 'Textile'), 'purple'], ['fragrance', l('عطور', 'Parfums'), 'green'], ['tableware', l('أناقة المائدة', 'Art de table'), 'gold'], ['kitchen', l('المطبخ', 'Cuisine'), 'blue'], ['organization', l('تنظيم المنزل', 'Rangement'), 'purple'], ['gifts', l('هدايا', 'Cadeaux'), 'green']].map(([key, label, color]) => <div key={key}><p><span><i className={color} />{label}</span><b>{categoryCounts[key] ?? 0}</b></p><div><i className={color} style={{ width: `${(categoryCounts[key] ?? 0) / Math.max(1, products.length) * 100}%` }} /></div></div>)}</div></section>
+        <section className="dashboard-card inventory-alert-card"><CardHead title={l('تنبيهات المخزون', 'Alertes de stock')} subtitle={`${lowStockProducts.length} ${l('تحتاج متابعة', 'à surveiller')}`} action={<CircleAlert />} />{lowStockProducts.length ? <div>{lowStockProducts.slice(0, 4).map(product => <button key={product.id} onClick={() => { setEditingProduct(product); setAddProductOpen(true) }}><StoredImage src={product.image} alt="" /><p><b>{product.name[lang]}</b><span>{productSku(product)}</span></p><em>{product.stock ?? 10} {l('متبقي', 'restant')}</em><ChevronLeft /></button>)}</div> : <DashboardEmpty icon={<CircleCheck />} text={l('المخزون في حالة ممتازة.', 'Le stock est en excellent état.')} />}</section>
         <section className="dashboard-card product-performance-card"><CardHead title={l('أداء المنتجات', 'Performance produits')} subtitle={l('من الطلبات الحقيقية', 'Selon les commandes')} action={<TrendingUp />} /><div className="performance-highlight"><div><Sparkles /><b>{topProducts[0]?.name[lang] ?? '—'}</b><span>{l('المنتج الأعلى أداءً', 'Produit le plus performant')}</span></div><strong>{productSales.get(topProducts[0]?.id ?? -1) ?? 0}<small>{l('مباع', 'vendu')}</small></strong></div><div className="performance-stats"><p><span>{l('قيمة المخزون', 'Valeur du stock')}</span><b>{money(inventoryValue)}</b></p><p><span>{l('متوسط السعر', 'Prix moyen')}</span><b>{money(products.length ? products.reduce((sum, product) => sum + product.price, 0) / products.length : 0)}</b></p></div></section>
       </div>
     </section>
@@ -642,7 +661,7 @@ export default function AdminDashboard({
         <div className="smart-scroll">{tabContent[tab]()}</div>
       </main>
 
-      {addProductOpen && <ProductEditorModal ar={ar} products={products} product={editingProduct} onClose={() => { setAddProductOpen(false); setEditingProduct(null) }} onSave={draft => { if (editingProduct) onUpdateProduct(editingProduct.id, draft); else onAddProduct(draft); setAddProductOpen(false); setEditingProduct(null); notify(editingProduct ? l('تم تحديث المنتج بنجاح', 'Produit mis à jour') : l('تمت إضافة المنتج بنجاح', 'Produit ajouté avec succès')) }} />}
+      {addProductOpen && <ProductEditorModal ar={ar} logo={logo} products={products} product={editingProduct} onClose={() => { setAddProductOpen(false); setEditingProduct(null) }} onSave={draft => { if (editingProduct) onUpdateProduct(editingProduct.id, draft); else onAddProduct(draft); setAddProductOpen(false); setEditingProduct(null); notify(editingProduct ? l('تم تحديث المنتج بنجاح', 'Produit mis à jour') : l('تمت إضافة المنتج بنجاح', 'Produit ajouté avec succès')) }} />}
       {notice && <div className="dashboard-toast"><CircleCheck /> {notice}</div>}
     </div>
   )
@@ -717,7 +736,45 @@ function MessageIcon() {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z" /><path d="M8 9h8M8 13h5" /></svg>
 }
 
-function ProductEditorModal({ ar, products, product, onClose, onSave }: { ar: boolean; products: DashboardProduct[]; product: DashboardProduct | null; onClose: () => void; onSave: (product: ProductDraft) => void }) {
+function ProductEditorModal({ ar, logo, products, product, onClose, onSave }: { ar: boolean; logo: string; products: DashboardProduct[]; product: DashboardProduct | null; onClose: () => void; onSave: (product: ProductDraft) => void }) {
+  const initialGallery = product?.images?.length ? product.images : product?.image ? [product.image] : products[0]?.image ? [products[0].image] : []
+  const [gallery, setGallery] = useState<string[]>(initialGallery)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const [remoteImage, setRemoteImage] = useState('')
+
+  const uploadFiles = async (files: File[] | FileList) => {
+    const accepted = Array.from(files).filter(file => file.type.startsWith('image/')).slice(0, Math.max(0, 8 - gallery.length))
+    if (!accepted.length) return
+    setUploading(true)
+    setUploadError('')
+    try {
+      const stored = await Promise.all(accepted.map(file => storeProductImage(file, logo)))
+      setGallery(current => [...current, ...stored].slice(0, 8))
+    } catch {
+      setUploadError(ar ? 'تعذر معالجة إحدى الصور. استخدم JPG أو PNG أصغر من 15MB.' : 'Impossible de traiter une image. Utilisez JPG ou PNG de moins de 15 Mo.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const removeImage = (source: string) => {
+    setGallery(current => current.filter(image => image !== source))
+  }
+
+  const makePrimary = (source: string) => setGallery(current => [source, ...current.filter(image => image !== source)])
+
+  const addRemoteImage = () => {
+    const source = remoteImage.trim()
+    if (!/^https?:\/\//i.test(source) || gallery.length >= 8) {
+      setUploadError(ar ? 'أدخل رابط صورة صحيح يبدأ بـ https://.' : 'Saisissez une URL valide commençant par https://.')
+      return
+    }
+    setGallery(current => [...current, source])
+    setRemoteImage('')
+    setUploadError('')
+  }
+
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const data = new FormData(event.currentTarget)
@@ -731,7 +788,12 @@ function ProductEditorModal({ ar, products, product, onClose, onSave }: { ar: bo
       stock: Math.max(0, Number(data.get('stock')) || 0),
       active: String(data.get('status')) === 'active',
       category: String(data.get('category')) as ProductDraft['category'],
-      image: String(data.get('image')),
+      image: gallery[0] || products[0]?.image || '',
+      images: gallery,
+      cost: Number(data.get('cost')) > 0 ? Number(data.get('cost')) : undefined,
+      sku: String(data.get('sku')).trim() || undefined,
+      featured: data.get('featured') === 'on',
+      tags: String(data.get('tags')).split(',').map(tag => tag.trim()).filter(Boolean),
     })
   }
   const imageChoices = Array.from(new Map(products.map(item => [item.image, item])).values())
@@ -744,9 +806,16 @@ function ProductEditorModal({ ar, products, product, onClose, onSave }: { ar: bo
         <label><span>{ar ? 'وصف مختصر' : 'Description courte'}</span><textarea name="descriptionAr" defaultValue={product?.description?.ar ?? ''} rows={3} /></label>
         <div className="editor-section-title"><span>02</span><p><b>{ar ? 'السعر والمخزون' : 'Prix et stock'}</b><small>{ar ? 'تحكم في التسعير والتوفر' : 'Tarification et disponibilité'}</small></p></div>
         <div className="editor-three-grid"><label><span>{ar ? 'السعر (د.ج)' : 'Prix (DA)'}</span><input name="price" type="number" min="0" defaultValue={product?.price ?? ''} required /></label><label><span>{ar ? 'السعر قبل التخفيض' : 'Prix barré'}</span><input name="oldPrice" type="number" min="0" defaultValue={product?.oldPrice ?? ''} /></label><label><span>{ar ? 'كمية المخزون' : 'Stock'}</span><input name="stock" type="number" min="0" defaultValue={product?.stock ?? 10} required /></label></div>
+        <div className="editor-three-grid"><label><span>{ar ? 'تكلفة المنتج' : 'Coût du produit'}</span><input name="cost" type="number" min="0" defaultValue={product?.cost ?? ''} /></label><label><span>SKU</span><input name="sku" defaultValue={product?.sku ?? ''} placeholder="EHS-0001" dir="ltr" /></label><label><span>{ar ? 'الوسوم — بفاصلة' : 'Tags — séparés par virgule'}</span><input name="tags" defaultValue={product?.tags?.join(', ') ?? ''} placeholder={ar ? 'جديد، فاخر' : 'nouveau, luxe'} /></label></div>
         <div className="editor-section-title"><span>03</span><p><b>{ar ? 'التصنيف والنشر' : 'Classement et publication'}</b><small>{ar ? 'حدد مكان ظهور المنتج' : 'Choisissez où afficher le produit'}</small></p></div>
-        <div className="add-form-grid"><label><span>{ar ? 'القسم' : 'Catégorie'}</span><select name="category" defaultValue={product?.category ?? 'decor'}><option value="decor">{ar ? 'ديكور' : 'Décoration'}</option><option value="lighting">{ar ? 'إضاءة' : 'Éclairage'}</option><option value="textiles">{ar ? 'مفروشات' : 'Textile'}</option><option value="fragrance">{ar ? 'عطور منزلية' : 'Parfums'}</option></select></label><label><span>{ar ? 'حالة المنتج' : 'Statut'}</span><select name="status" defaultValue={product?.active === false ? 'draft' : 'active'}><option value="active">{ar ? 'منشور في المتجر' : 'Actif dans la boutique'}</option><option value="draft">{ar ? 'مسودة مخفية' : 'Brouillon masqué'}</option></select></label></div>
-        <label><span>{ar ? 'صورة المنتج المميزة بالشعار' : 'Image produit avec logo'}</span><select name="image" defaultValue={product?.image ?? imageChoices[0]?.image}>{imageChoices.map(item => <option key={item.image} value={item.image}>{item.name[ar ? 'ar' : 'fr']}</option>)}</select></label>
+        <div className="add-form-grid"><label><span>{ar ? 'القسم' : 'Catégorie'}</span><select name="category" defaultValue={product?.category ?? 'decor'}><option value="decor">{ar ? 'ديكور' : 'Décoration'}</option><option value="lighting">{ar ? 'إضاءة' : 'Éclairage'}</option><option value="textiles">{ar ? 'مفروشات' : 'Textile'}</option><option value="fragrance">{ar ? 'عطور منزلية' : 'Parfums'}</option><option value="tableware">{ar ? 'أناقة المائدة' : 'Art de table'}</option><option value="kitchen">{ar ? 'المطبخ' : 'Cuisine'}</option><option value="organization">{ar ? 'تنظيم المنزل' : 'Rangement'}</option><option value="gifts">{ar ? 'هدايا' : 'Cadeaux'}</option></select></label><label><span>{ar ? 'حالة المنتج' : 'Statut'}</span><select name="status" defaultValue={product?.active === false ? 'draft' : 'active'}><option value="active">{ar ? 'منشور في المتجر' : 'Actif dans la boutique'}</option><option value="draft">{ar ? 'مسودة مخفية' : 'Brouillon masqué'}</option></select></label></div>
+        <label className="featured-product-check"><input type="checkbox" name="featured" defaultChecked={product?.featured ?? false} /><i><Check /></i><p><b>{ar ? 'منتج مميز' : 'Produit vedette'}</b><span>{ar ? 'إبرازه داخل المتجر والحملات' : 'Le mettre en avant dans la boutique'}</span></p></label>
+        <div className="editor-section-title"><span>04</span><p><b>{ar ? 'صور المنتج' : 'Images du produit'}</b><small>{ar ? 'حتى 8 صور — تُضغط ويضاف لها الشعار تلقائياً' : 'Jusqu’à 8 images — compressées et marquées automatiquement'}</small></p></div>
+        <div className={`product-upload-zone ${uploading ? 'uploading' : ''}`} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); void uploadFiles(event.dataTransfer.files) }}><input type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={event => event.target.files && void uploadFiles(event.target.files)} disabled={uploading || gallery.length >= 8} /><ImagePlus /><p><b>{uploading ? (ar ? 'جارٍ ضغط الصور وإضافة الشعار...' : 'Compression et ajout du logo...') : (ar ? 'اسحب الصور هنا أو اضغط للاختيار' : 'Glissez vos images ou cliquez pour choisir')}</b><span>{ar ? `JPG, PNG, WEBP · ${gallery.length}/8 صور` : `JPG, PNG, WEBP · ${gallery.length}/8 images`}</span></p></div>
+        {uploadError && <div className="upload-error"><CircleAlert /> {uploadError}</div>}
+        <div className="remote-image-row"><Link2 /><input type="url" value={remoteImage} onChange={event => setRemoteImage(event.target.value)} placeholder="https://example.com/product.jpg" dir="ltr" /><button type="button" onClick={addRemoteImage}><Plus /> {ar ? 'إضافة رابط' : 'Ajouter URL'}</button></div>
+        <div className="product-image-gallery">{gallery.map((source, index) => <article className={index === 0 ? 'primary' : ''} key={`${source}-${index}`}><StoredImage src={source} alt="" /><button type="button" className="make-primary" onClick={() => makePrimary(source)} title={ar ? 'تعيين كصورة رئيسية' : 'Définir comme principale'}>{index === 0 ? <Crown /> : <Sparkles />}</button><button type="button" className="remove-uploaded-image" onClick={() => removeImage(source)}><X /></button>{index === 0 && <span>{ar ? 'الرئيسية' : 'Principale'}</span>}</article>)}{gallery.length === 0 && <div className="empty-gallery"><ImagePlus /><span>{ar ? 'أضف صورة واحدة على الأقل' : 'Ajoutez au moins une image'}</span></div>}</div>
+        <div className="image-library"><span>{ar ? 'أو اختر من مكتبة المتجر:' : 'Ou choisissez dans la bibliothèque :'}</span><div>{imageChoices.slice(0, 8).map(item => <button type="button" key={item.image} onClick={() => !gallery.includes(item.image) && setGallery(current => [...current, item.image].slice(0, 8))}><StoredImage src={item.image} alt="" /><Plus /></button>)}</div></div>
       </div>
       <div className="editor-modal-footer"><div className="add-product-note"><ShieldCheck /> {ar ? 'يُحفظ التعديل مباشرة في هذا المتصفح.' : 'Les changements sont enregistrés dans ce navigateur.'}</div><button type="button" className="smart-secondary" onClick={onClose}>{ar ? 'إلغاء' : 'Annuler'}</button><button className="smart-primary full-add" type="submit"><Check /> {product ? (ar ? 'حفظ التغييرات' : 'Enregistrer') : (ar ? 'إضافة المنتج' : 'Ajouter')}</button></div>
     </form>

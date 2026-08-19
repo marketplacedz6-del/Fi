@@ -38,11 +38,13 @@ import {
   X,
 } from 'lucide-react'
 import AdminDashboard from './AdminDashboard'
+import StoredImage from './StoredImage'
 import { initializeAnalytics, trackCommerceEvent } from './lib/analytics'
 import { dispatchOrder, type StoreOrder } from './lib/integrations'
+import { deleteStoredImage } from './lib/imageStore'
 
 type Lang = 'ar' | 'fr'
-type Category = 'all' | 'decor' | 'lighting' | 'textiles' | 'fragrance'
+type Category = 'all' | 'decor' | 'lighting' | 'textiles' | 'fragrance' | 'tableware' | 'kitchen' | 'organization' | 'gifts'
 type Localized = { ar: string; fr: string }
 
 // Keeps public assets working both at a root domain (Netlify) and under
@@ -87,6 +89,11 @@ type Product = {
   badge?: Localized
   stock?: number
   active?: boolean
+  images?: string[]
+  cost?: number
+  sku?: string
+  featured?: boolean
+  tags?: string[]
 }
 
 type CartItem = { id: number; quantity: number }
@@ -209,7 +216,7 @@ const copy = {
     livingCollection: 'دفء الصالون', livingCollectionSub: 'راحة بتفاصيل راقية',
     explore: 'استكشفي',
     selected: 'مختار لكِ', productsTitle: 'قطع تُكمل حكاية بيتك', productsText: 'كل منتج اختير لجودته، بساطته، وقدرته على صنع فرق حقيقي.',
-    all: 'الكل', decor: 'ديكور', lighting: 'إضاءة', textiles: 'مفروشات', fragrance: 'عطور منزلية',
+    all: 'الكل', decor: 'ديكور', lighting: 'إضاءة', textiles: 'مفروشات', fragrance: 'عطور منزلية', tableware: 'أناقة المائدة', kitchen: 'المطبخ', organization: 'تنظيم المنزل', gifts: 'هدايا',
     newest: 'الأحدث', priceLow: 'السعر: من الأقل', priceHigh: 'السعر: من الأعلى',
     quickView: 'نظرة سريعة', add: 'أضيفي للسلة', added: 'أُضيف إلى سلتك', noResults: 'لا توجد منتجات تطابق بحثك.',
     storyEyebrow: 'من بيتنا إلى بيتك', storyTitle: 'نؤمن أن الأناقة إحساس قبل أن تكون مظهراً',
@@ -249,7 +256,7 @@ const copy = {
     curation: 'Nos sélections', collectionTitle: 'Choisissez l’ambiance', collectionText: 'Des collections harmonieuses pour une maison plus douce et plus belle.',
     tableCollection: 'Art de la table', tableCollectionSub: 'Recevoir avec élégance', calmCollection: 'Parfum & calme', calmCollectionSub: 'Vos instants précieux', livingCollection: 'Salon chaleureux', livingCollectionSub: 'Le confort raffiné', explore: 'Explorer',
     selected: 'Pour vous', productsTitle: 'Des pièces qui racontent votre intérieur', productsText: 'Chaque produit est choisi pour sa qualité, sa simplicité et sa présence.',
-    all: 'Tout', decor: 'Décoration', lighting: 'Éclairage', textiles: 'Textile', fragrance: 'Parfums', newest: 'Nouveautés', priceLow: 'Prix croissant', priceHigh: 'Prix décroissant',
+    all: 'Tout', decor: 'Décoration', lighting: 'Éclairage', textiles: 'Textile', fragrance: 'Parfums', tableware: 'Art de table', kitchen: 'Cuisine', organization: 'Rangement', gifts: 'Cadeaux', newest: 'Nouveautés',  priceLow: 'Prix croissant', priceHigh: 'Prix décroissant',
     quickView: 'Aperçu', add: 'Ajouter au panier', added: 'Ajouté à votre panier', noResults: 'Aucun produit ne correspond à votre recherche.',
     storyEyebrow: 'De notre maison à la vôtre', storyTitle: 'L’élégance est une sensation avant d’être un style',
     storyText: 'Elegance Home & Style est née de notre passion pour les détails apaisants. Chaque pièce est choisie comme si elle était destinée à notre propre maison.',
@@ -300,6 +307,7 @@ function App() {
   const [cartOpen, setCartOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [quickProduct, setQuickProduct] = useState<Product | null>(null)
+  const [quickImage, setQuickImage] = useState('')
   const [quickQuantity, setQuickQuantity] = useState(1)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [orderId, setOrderId] = useState<string | null>(null)
@@ -417,6 +425,7 @@ function App() {
 
   const openQuickView = (product: Product) => {
     setQuickProduct(product)
+    setQuickImage(product.image)
     setQuickQuantity(1)
     trackCommerceEvent('ViewContent', {
       content_ids: [product.id],
@@ -468,7 +477,7 @@ function App() {
     setToast(isAr ? 'تم تسجيل الخروج' : 'Déconnexion réussie')
   }
 
-  type DashboardProductDraft = { nameAr: string; nameFr: string; descriptionAr: string; price: number; oldPrice?: number; stock: number; active: boolean; category: Exclude<Category, 'all'>; image: string }
+  type DashboardProductDraft = { nameAr: string; nameFr: string; descriptionAr: string; price: number; oldPrice?: number; stock: number; active: boolean; category: Exclude<Category, 'all'>; image: string; images: string[]; cost?: number; sku?: string; featured: boolean; tags: string[] }
 
   const addDashboardProduct = (draft: DashboardProductDraft) => {
     setCatalogProducts(current => [...current, {
@@ -484,6 +493,11 @@ function App() {
       oldPrice: draft.oldPrice,
       stock: draft.stock,
       active: draft.active,
+      images: draft.images,
+      cost: draft.cost,
+      sku: draft.sku,
+      featured: draft.featured,
+      tags: draft.tags,
       rating: 5,
       reviews: 0,
       badge: { ar: 'جديد', fr: 'Nouveau' },
@@ -501,6 +515,11 @@ function App() {
       oldPrice: draft.oldPrice,
       stock: draft.stock,
       active: draft.active,
+      images: draft.images,
+      cost: draft.cost,
+      sku: draft.sku,
+      featured: draft.featured,
+      tags: draft.tags,
     } : product))
   }
 
@@ -515,6 +534,9 @@ function App() {
   const deleteDashboardProducts = (ids: number[]) => {
     const accepted = window.confirm(isAr ? `هل تريد حذف ${ids.length} منتج من المتجر؟` : `Supprimer ${ids.length} produit(s) ?`)
     if (!accepted) return
+    const deletedSources = catalogProducts.filter(product => ids.includes(product.id)).flatMap(product => product.images ?? [product.image])
+    const retainedSources = new Set(catalogProducts.filter(product => !ids.includes(product.id)).flatMap(product => product.images ?? [product.image]))
+    deletedSources.filter(source => !retainedSources.has(source)).forEach(source => { void deleteStoredImage(source) })
     setCatalogProducts(current => current.filter(product => !ids.includes(product.id)))
     setCart(current => current.filter(item => !ids.includes(item.id)))
   }
@@ -568,6 +590,7 @@ function App() {
 
   const categoryLabels: Record<Category, string> = {
     all: t.all, decor: t.decor, lighting: t.lighting, textiles: t.textiles, fragrance: t.fragrance,
+    tableware: t.tableware, kitchen: t.kitchen, organization: t.organization, gifts: t.gifts,
   }
 
   return (
@@ -823,7 +846,7 @@ function App() {
                 <div className="cart-items">
                   {cartProducts.map(item => (
                     <div className="cart-item" key={item.id}>
-                      <img src={item.image} alt={item.name[lang]} />
+                      <StoredImage src={item.image} alt={item.name[lang]} />
                       <div className="cart-item-info">
                         <h4>{item.name[lang]}</h4><p>{money(item.price)}</p>
                         <div className="quantity-row">
@@ -862,7 +885,7 @@ function App() {
         <div className="overlay modal-overlay" onMouseDown={() => setQuickProduct(null)}>
           <div className="quick-modal" role="dialog" aria-modal="true" onMouseDown={e => e.stopPropagation()}>
             <button className="modal-close" onClick={() => setQuickProduct(null)} aria-label={t.close}><X /></button>
-            <div className="quick-image"><img src={quickProduct.image} alt={quickProduct.name[lang]} /></div>
+            <div className="quick-image"><StoredImage src={quickImage || quickProduct.image} alt={quickProduct.name[lang]} />{(quickProduct.images?.length ?? 0) > 1 && <div className="quick-gallery">{quickProduct.images?.map((source, index) => <button key={`${source}-${index}`} className={(quickImage || quickProduct.image) === source ? 'active' : ''} onClick={() => setQuickImage(source)}><StoredImage src={source} alt="" /></button>)}</div>}</div>
             <div className="quick-copy">
               <p className="quick-category">{categoryLabels[quickProduct.category]}</p>
               <h2>{quickProduct.name[lang]}</h2>
@@ -996,7 +1019,8 @@ function ProductCard({ product, lang, money, wished, onWish, onQuick, onAdd, qui
   return (
     <article className="product-card">
       <div className="product-image-wrap">
-        <img src={product.image} alt={product.name[lang]} loading="lazy" />
+        <StoredImage className="product-primary-image" src={product.image} alt={product.name[lang]} loading="lazy" />
+        {(product.images?.length ?? 0) > 1 && <StoredImage className="product-secondary-image" src={product.images![1]} alt="" loading="lazy" />}
         {product.badge && <span className="product-badge">{product.badge[lang]}</span>}
         <button className={`wish-button ${wished ? 'active' : ''}`} onClick={onWish} aria-label="wishlist"><Heart fill={wished ? 'currentColor' : 'none'} /></button>
         <button className="quick-button" onClick={onQuick}><Search /> {quickLabel}</button>

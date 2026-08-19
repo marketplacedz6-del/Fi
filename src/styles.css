@@ -29,6 +29,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
 button { color: inherit; }
 a { color: inherit; text-decoration: none; }
 img { display: block; max-width: 100%; }
+.stored-image-placeholder { display: block; width: 100%; height: 100%; min-height: 40px; background: linear-gradient(110deg, #e8e2d8 20%, #f4f0e8 40%, #e8e2d8 60%); background-size: 220% 100%; animation: image-loading 1.4s linear infinite; }
+@keyframes image-loading { to { background-position: -220% 0; } }
 button, select { cursor: pointer; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 
@@ -149,8 +151,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .product-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 42px 22px; }
 .product-card { min-width: 0; }
 .product-image-wrap { height: 400px; position: relative; overflow: hidden; background: #ded8ce; }
-.product-image-wrap > img { width: 100%; height: 100%; object-fit: cover; transition: transform .65s cubic-bezier(.2,.7,.2,1); }
-.product-card:hover .product-image-wrap > img { transform: scale(1.035); }
+.product-image-wrap > img, .product-image-wrap > .stored-image-placeholder { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .65s cubic-bezier(.2,.7,.2,1), opacity .45s; }
+.product-image-wrap > .product-secondary-image { opacity: 0; }
+.product-card:hover .product-image-wrap > .product-primary-image { transform: scale(1.035); }
+.product-card:hover .product-image-wrap > .product-secondary-image { opacity: 1; transform: scale(1.025); }
 .product-badge { position: absolute; top: 15px; inset-inline-start: 15px; padding: 7px 10px; background: rgba(255,255,255,.88); color: var(--navy); backdrop-filter: blur(8px); font-size: 8px; font-weight: 600; }
 .wish-button { position: absolute; top: 14px; inset-inline-end: 14px; width: 34px; height: 34px; border: 0; background: rgba(255,255,255,.88); color: var(--navy); border-radius: 50%; display: grid; place-items: center; transition: .2s; }
 .wish-button:hover, .wish-button.active { color: #a45959; transform: scale(1.07); }
@@ -305,8 +309,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @keyframes modal-up { from { opacity: 0; transform: translateY(22px) scale(.985); } }
 .modal-close { position: absolute; z-index: 3; top: 15px; inset-inline-end: 15px; width: 37px; height: 37px; border: 0; background: rgba(255,255,255,.85); border-radius: 50%; display: grid; place-items: center; }
 .modal-close svg { width: 19px; }
-.quick-image { min-height: 540px; overflow: hidden; }
-.quick-image img { width: 100%; height: 100%; object-fit: cover; }
+.quick-image { min-height: 540px; overflow: hidden; position: relative; }
+.quick-image > img, .quick-image > .stored-image-placeholder { width: 100%; height: 100%; object-fit: cover; }
+.quick-gallery { position: absolute; inset-inline: 12px; bottom: 12px; display: flex; gap: 6px; overflow-x: auto; padding: 6px; background: rgba(255,255,255,.7); backdrop-filter: blur(8px); }
+.quick-gallery button { width: 50px; height: 50px; flex: 0 0 50px; padding: 0; border: 2px solid transparent; background: #eee8dd; overflow: hidden; }
+.quick-gallery button.active { border-color: var(--gold); }
+.quick-gallery img, .quick-gallery .stored-image-placeholder { width: 100%; height: 100%; object-fit: cover; }
 .quick-copy { padding: 63px 43px 35px; }
 .quick-category { margin: 0 0 12px; color: var(--gold); font-size: 9px; letter-spacing: .08em; }
 .quick-copy h2 { margin: 0 0 12px; color: var(--navy); font-size: 29px; line-height: 1.5; font-weight: 500; }
