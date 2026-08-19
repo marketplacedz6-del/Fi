@@ -157,6 +157,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .product-card:hover .product-image-wrap > .product-primary-image { transform: scale(1.035); }
 .product-card:hover .product-image-wrap > .product-secondary-image { opacity: 1; transform: scale(1.025); }
 .product-badge { position: absolute; top: 15px; inset-inline-start: 15px; padding: 7px 10px; background: rgba(255,255,255,.88); color: var(--navy); backdrop-filter: blur(8px); font-size: 8px; font-weight: 600; }
+.stock-out-badge { background: rgba(120,48,48,.9); color: white; }
+.product-card.out-of-stock .product-image-wrap > img { filter: grayscale(.25); opacity: .72; }
+.product-buy button:disabled { opacity: .42; cursor: not-allowed; background: #d8d5cf; border-color: #d8d5cf; color: #777; }
+.stock.unavailable { color: #a64e4e; }
+.quick-actions .primary-button:disabled, .quantity-control button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
 .wish-button { position: absolute; top: 14px; inset-inline-end: 14px; width: 34px; height: 34px; border: 0; background: rgba(255,255,255,.88); color: var(--navy); border-radius: 50%; display: grid; place-items: center; transition: .2s; }
 .wish-button:hover, .wish-button.active { color: #a45959; transform: scale(1.07); }
 .wish-button svg { width: 17px; }
