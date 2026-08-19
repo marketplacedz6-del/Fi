@@ -9,12 +9,17 @@ import {
   ChevronRight,
   CircleCheck,
   Clock3,
+  Eye,
+  EyeOff,
   Gift,
   Globe2,
   Headphones,
   Heart,
   Instagram,
+  KeyRound,
+  LayoutDashboard,
   LockKeyhole,
+  LogOut,
   Mail,
   MapPin,
   Menu,
@@ -24,12 +29,14 @@ import {
   Phone,
   Plus,
   Search,
+  Settings,
   ShoppingBag,
   Sparkles,
   Star,
   Trash2,
   Truck,
   UserRound,
+  UsersRound,
   X,
 } from 'lucide-react'
 import { initializeAnalytics, trackCommerceEvent } from './lib/analytics'
@@ -42,6 +49,17 @@ type Localized = { ar: string; fr: string }
 // Keeps public assets working both at a root domain (Netlify) and under
 // the repository sub-path used by GitHub Pages.
 const assetPath = (path: string) => `${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`
+
+// The static build validates one-way hashes; the actual password is never
+// written to the generated JavaScript bundle.
+const ADMIN_EMAIL_HASH = '1d8c5f9c308dffc945ee2b03e4cb5f9d993489ef462cb191aac76bcb96255a52'
+const ADMIN_PASSWORD_HASH = 'f37f3f2b0dc57a86dee4ba6ff855283bb4d2f0dea1c5bd1b708853444c2ffcec'
+
+const sha256 = async (value: string) => {
+  const bytes = new TextEncoder().encode(value)
+  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
+}
 
 type Product = {
   id: number
@@ -255,6 +273,12 @@ function App() {
   const [orderId, setOrderId] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [subscribed, setSubscribed] = useState(false)
+  const [loginOpen, setLoginOpen] = useState(false)
+  const [accountOpen, setAccountOpen] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(() => sessionStorage.getItem('ehs-admin-session') === 'active')
+  const [authError, setAuthError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [loginPending, setLoginPending] = useState(false)
 
   const t = copy[lang]
   const isAr = lang === 'ar'
@@ -287,10 +311,10 @@ function App() {
   }, [toast])
 
   useEffect(() => {
-    const shouldLock = cartOpen || menuOpen || !!quickProduct || checkoutOpen || !!orderId
+    const shouldLock = cartOpen || menuOpen || !!quickProduct || checkoutOpen || !!orderId || loginOpen || accountOpen
     document.body.style.overflow = shouldLock ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
-  }, [cartOpen, menuOpen, quickProduct, checkoutOpen, orderId])
+  }, [cartOpen, menuOpen, quickProduct, checkoutOpen, orderId, loginOpen, accountOpen])
 
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
@@ -299,6 +323,8 @@ function App() {
       setMenuOpen(false)
       setQuickProduct(null)
       setCheckoutOpen(false)
+      setLoginOpen(false)
+      setAccountOpen(false)
     }
     window.addEventListener('keydown', close)
     return () => window.removeEventListener('keydown', close)
@@ -307,6 +333,7 @@ function App() {
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
   const cartProducts = cart.map(item => ({ ...products.find(p => p.id === item.id)!, quantity: item.quantity })).filter(Boolean)
   const subtotal = cartProducts.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  const storedOrders = readStorage<StoreOrder[]>('ehs-orders', [])
 
   const filteredProducts = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -358,6 +385,46 @@ function App() {
       value: product.price,
       currency: 'DZD',
     })
+  }
+
+  const openAccount = () => {
+    setMenuOpen(false)
+    setAuthError('')
+    if (isAuthenticated) setAccountOpen(true)
+    else setLoginOpen(true)
+  }
+
+  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setAuthError('')
+    setLoginPending(true)
+    const data = new FormData(event.currentTarget)
+    const email = String(data.get('email') ?? '').trim().toLowerCase()
+    const password = String(data.get('password') ?? '')
+
+    try {
+      const [emailHash, passwordHash] = await Promise.all([sha256(email), sha256(password)])
+      if (emailHash !== ADMIN_EMAIL_HASH || passwordHash !== ADMIN_PASSWORD_HASH) {
+        setAuthError(isAr ? 'البريد الإلكتروني أو كلمة السر غير صحيحة.' : 'E-mail ou mot de passe incorrect.')
+        return
+      }
+      sessionStorage.setItem('ehs-admin-session', 'active')
+      setIsAuthenticated(true)
+      setLoginOpen(false)
+      setAccountOpen(true)
+      setToast(isAr ? 'تم تسجيل الدخول بنجاح' : 'Connexion réussie')
+    } catch {
+      setAuthError(isAr ? 'تعذر تسجيل الدخول. حاولي مرة أخرى.' : 'Connexion impossible. Réessayez.')
+    } finally {
+      setLoginPending(false)
+    }
+  }
+
+  const logout = () => {
+    sessionStorage.removeItem('ehs-admin-session')
+    setIsAuthenticated(false)
+    setAccountOpen(false)
+    setToast(isAr ? 'تم تسجيل الخروج' : 'Déconnexion réussie')
   }
 
   const goToProducts = (selectedCategory?: Category) => {
@@ -445,7 +512,9 @@ function App() {
                 {searchOpen ? <X size={20} /> : <Search size={21} />}
               </button>
             </div>
-            <button className="icon-button desktop-only" aria-label={t.account}><UserRound size={21} /></button>
+            <button className={`icon-button desktop-only account-trigger ${isAuthenticated ? 'signed-in' : ''}`} aria-label={t.account} onClick={openAccount}>
+              {isAuthenticated ? <LayoutDashboard size={21} /> : <UserRound size={21} />}
+            </button>
             <button className="icon-button desktop-only badge-button" aria-label={t.wishlist} onClick={() => goToProducts()}>
               <Heart size={21} />{wishlist.length > 0 && <span>{wishlist.length}</span>}
             </button>
@@ -640,7 +709,7 @@ function App() {
             <nav>{navLinks.map(([id, label]) => <a key={id} href={`#${id}`} onClick={e => stopLink(e, id)}>{label}{isAr ? <ChevronLeft /> : <ChevronRight />}</a>)}</nav>
             <div className="mobile-nav-bottom">
               <button onClick={() => setLang(isAr ? 'fr' : 'ar')}><Globe2 /> {isAr ? 'Français' : 'العربية'}</button>
-              <button><UserRound /> {t.account}</button>
+              <button onClick={openAccount}>{isAuthenticated ? <LayoutDashboard /> : <UserRound />} {isAuthenticated ? (isAr ? 'لوحة المتجر' : 'Tableau de bord') : t.account}</button>
             </div>
           </aside>
         </div>
@@ -737,6 +806,91 @@ function App() {
         </div>
       )}
 
+      {loginOpen && (
+        <div className="overlay modal-overlay auth-overlay" onMouseDown={() => setLoginOpen(false)}>
+          <div className="login-modal" role="dialog" aria-modal="true" aria-labelledby="login-title" onMouseDown={e => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setLoginOpen(false)} aria-label={t.close}><X /></button>
+            <div className="login-brand"><img src={assetPath('assets/logo.png')} alt="Elegance Home & Style" /></div>
+            <p className="login-kicker"><LockKeyhole /> {isAr ? 'دخول آمن' : 'Accès sécurisé'}</p>
+            <h2 id="login-title">{isAr ? 'الدخول إلى حساب المتجر' : 'Connexion au compte boutique'}</h2>
+            <p className="login-intro">{isAr ? 'أدخل بيانات حسابك للوصول إلى لوحة إدارة Elegance.' : 'Saisissez vos identifiants pour accéder au tableau de bord Elegance.'}</p>
+            <form onSubmit={handleLogin}>
+              <label>
+                <span>{isAr ? 'البريد الإلكتروني' : 'Adresse e-mail'}</span>
+                <div className="auth-input"><Mail /><input name="email" type="email" required autoComplete="username" dir="ltr" placeholder="name@email.com" /></div>
+              </label>
+              <label>
+                <span>{isAr ? 'كلمة السر' : 'Mot de passe'}</span>
+                <div className="auth-input"><KeyRound /><input name="password" type={showPassword ? 'text' : 'password'} required autoComplete="current-password" dir="ltr" />
+                  <button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff /> : <Eye />}</button>
+                </div>
+              </label>
+              {authError && <div className="auth-error" role="alert">{authError}</div>}
+              <button className="primary-button full login-submit" type="submit" disabled={loginPending}>
+                {loginPending ? <span className="button-spinner" /> : <LockKeyhole />}
+                {loginPending ? (isAr ? 'جارٍ التحقق...' : 'Vérification...') : (isAr ? 'تسجيل الدخول' : 'Se connecter')}
+              </button>
+            </form>
+            <p className="auth-security"><LockKeyhole /> {isAr ? 'جلسة الدخول محفوظة في هذا المتصفح فقط.' : 'La session est conservée uniquement dans ce navigateur.'}</p>
+          </div>
+        </div>
+      )}
+
+      {accountOpen && isAuthenticated && (
+        <div className="overlay modal-overlay account-overlay" onMouseDown={() => setAccountOpen(false)}>
+          <div className="account-modal" role="dialog" aria-modal="true" aria-labelledby="account-title" onMouseDown={e => e.stopPropagation()}>
+            <aside className="account-sidebar">
+              <img src={assetPath('assets/logo.png')} alt="Elegance Home & Style" />
+              <p>{isAr ? 'إدارة المتجر' : 'Administration'}</p>
+              <nav>
+                <button className="active"><LayoutDashboard /> {isAr ? 'نظرة عامة' : 'Vue générale'}</button>
+                <button onClick={() => { setAccountOpen(false); goToProducts() }}><ShoppingBag /> {isAr ? 'المنتجات' : 'Produits'}</button>
+                <button><PackageCheck /> {isAr ? 'الطلبات' : 'Commandes'} <span>{storedOrders.length}</span></button>
+                <button><UsersRound /> CRM</button>
+                <button><Settings /> {isAr ? 'الإعدادات' : 'Paramètres'}</button>
+              </nav>
+              <button className="sidebar-logout" onClick={logout}><LogOut /> {isAr ? 'تسجيل الخروج' : 'Déconnexion'}</button>
+            </aside>
+            <div className="account-content">
+              <div className="account-head">
+                <div><p>{isAr ? 'مرحباً بعودتك' : 'Bon retour'}</p><h2 id="account-title">Walid</h2></div>
+                <button className="icon-button" onClick={() => setAccountOpen(false)} aria-label={t.close}><X /></button>
+              </div>
+              <div className="admin-banner">
+                <div><span>{isAr ? 'حساب المالك' : 'Compte propriétaire'}</span><h3>Elegance Home & Style</h3><p dir="ltr">walid@gmail.com</p></div>
+                <div className="admin-banner-icon"><LayoutDashboard /></div>
+              </div>
+              <div className="admin-stats">
+                <AdminStat icon={<ShoppingBag />} value={products.length.toString()} label={isAr ? 'المنتجات' : 'Produits'} color="gold" />
+                <AdminStat icon={<PackageCheck />} value={storedOrders.length.toString()} label={isAr ? 'الطلبات' : 'Commandes'} color="green" />
+                <AdminStat icon={<UsersRound />} value="1 / 25" label={isAr ? 'الموظفون' : 'Équipe'} color="blue" />
+              </div>
+              <section className="recent-orders">
+                <div className="dashboard-section-title"><h3>{isAr ? 'أحدث الطلبات' : 'Commandes récentes'}</h3><span>{isAr ? 'محفوظة في المتجر' : 'Enregistrées dans la boutique'}</span></div>
+                {storedOrders.length ? (
+                  <div className="orders-list">
+                    {storedOrders.slice(-3).reverse().map(order => (
+                      <div className="order-row" key={order.id}>
+                        <div className="order-avatar"><PackageCheck /></div>
+                        <div><b dir="ltr">{order.id}</b><span>{String(order.customer.name ?? (isAr ? 'زبون' : 'Client'))}</span></div>
+                        <p>{money(order.total)}</p>
+                        <em>{isAr ? 'طلب جديد' : 'Nouvelle'}</em>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="dashboard-empty"><PackageCheck /><p>{isAr ? 'لا توجد طلبات بعد. ستظهر الطلبات الجديدة هنا.' : 'Aucune commande. Les nouvelles commandes apparaîtront ici.'}</p></div>
+                )}
+              </section>
+              <div className="dashboard-footer-actions">
+                <button className="outline-button" onClick={() => { setAccountOpen(false); goToProducts() }}><ShoppingBag /> {isAr ? 'عرض المتجر' : 'Voir la boutique'}</button>
+                <button className="logout-mobile" onClick={logout}><LogOut /> {isAr ? 'خروج' : 'Déconnexion'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {orderId && (
         <div className="overlay modal-overlay success-overlay">
           <div className="success-modal" role="dialog" aria-modal="true">
@@ -806,6 +960,10 @@ function ReviewCard({ text, name, place, featured = false }: { text: string; nam
       <div className="review-author"><div>{name.charAt(0)}</div><p><b>{name}</b><span>{place}</span></p><BadgeCheck /></div>
     </article>
   )
+}
+
+function AdminStat({ icon, value, label, color }: { icon: React.ReactNode; value: string; label: string; color: 'gold' | 'green' | 'blue' }) {
+  return <article className="admin-stat"><div className={color}>{icon}</div><p><b>{value}</b><span>{label}</span></p></article>
 }
 
 export default App
