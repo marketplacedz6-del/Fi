@@ -1,4 +1,10 @@
 .account-overlay { padding: 15px; background: rgba(9, 15, 24, .72); }
+.dashboard-error-fallback { width: min(520px, calc(100% - 24px)); padding: 38px; background: white; box-shadow: 0 25px 80px rgba(8,15,25,.28); text-align: center; }
+.dashboard-error-fallback > svg { color: #c67852; }
+.dashboard-error-fallback h2 { margin: 13px 0 8px; color: var(--navy); font-size: 19px; }
+.dashboard-error-fallback p { margin: 0 auto 23px; max-width: 410px; color: #667085; font-size: 8px; line-height: 1.9; }
+.dashboard-error-fallback > div { display: flex; justify-content: center; gap: 8px; }
+.dashboard-error-fallback .primary-button, .dashboard-error-fallback .outline-button { min-height: 42px; font-size: 8px; }
 .smart-dashboard { width: min(1510px, 100%); height: min(920px, calc(100vh - 30px)); display: grid; grid-template-columns: 242px 1fr; background: #f4f6f8; color: #1d2939; box-shadow: 0 35px 110px rgba(3, 9, 18, .42); overflow: hidden; animation: modal-up .32s ease both; position: relative; }
 .smart-dashboard button, .smart-dashboard input, .smart-dashboard select { font-family: var(--font-ar); }
 .smart-sidebar { background: #111e30; color: white; padding: 20px 13px 16px; display: flex; flex-direction: column; min-height: 0; position: relative; z-index: 6; }

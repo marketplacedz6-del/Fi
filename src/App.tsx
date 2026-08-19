@@ -1,4 +1,4 @@
-import { FormEvent, MouseEvent, useEffect, useMemo, useState } from 'react'
+import { Component, FormEvent, MouseEvent, type ReactNode, useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CircleAlert,
   CircleCheck,
   Clock3,
   Eye,
@@ -50,13 +51,38 @@ const assetPath = (path: string) => `${import.meta.env.BASE_URL}${path.replace(/
 
 // The static build validates one-way hashes; the actual password is never
 // written to the generated JavaScript bundle.
-const ADMIN_EMAIL_HASH = '1d8c5f9c308dffc945ee2b03e4cb5f9d993489ef462cb191aac76bcb96255a52'
-const ADMIN_PASSWORD_HASH = 'f37f3f2b0dc57a86dee4ba6ff855283bb4d2f0dea1c5bd1b708853444c2ffcec'
+const ADMIN_EMAIL_HASHES = ['1d8c5f9c308dffc945ee2b03e4cb5f9d993489ef462cb191aac76bcb96255a52', 'bfeae9cb']
+const ADMIN_PASSWORD_HASHES = ['f37f3f2b0dc57a86dee4ba6ff855283bb4d2f0dea1c5bd1b708853444c2ffcec', 'c92e926c']
 
-const sha256 = async (value: string) => {
-  const bytes = new TextEncoder().encode(value)
-  const digest = await crypto.subtle.digest('SHA-256', bytes)
-  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
+const fallbackHash = (value: string) => {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
+
+const credentialHash = async (value: string) => {
+  try {
+    if (!globalThis.crypto?.subtle) return fallbackHash(value)
+    const bytes = new TextEncoder().encode(value)
+    const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes)
+    return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
+  } catch {
+    return fallbackHash(value)
+  }
+}
+
+const hasAdminSession = () => {
+  try { return sessionStorage.getItem('ehs-admin-session') === 'active' } catch { return false }
+}
+
+const saveAdminSession = (active: boolean) => {
+  try {
+    if (active) sessionStorage.setItem('ehs-admin-session', 'active')
+    else sessionStorage.removeItem('ehs-admin-session')
+  } catch { /* Private browsing can block storage. */ }
 }
 
 type Product = {
@@ -255,6 +281,10 @@ const readStorage = <T,>(key: string, fallback: T): T => {
   }
 }
 
+const writeStorage = (key: string, value: unknown) => {
+  try { localStorage.setItem(key, JSON.stringify(value)) } catch { /* Continue when storage is restricted. */ }
+}
+
 function App() {
   const [lang, setLang] = useState<Lang>(() => readStorage<Lang>('ehs-lang', 'ar'))
   const [catalogProducts, setCatalogProducts] = useState<Product[]>(() => readStorage<Product[]>('ehs-products', defaultProducts))
@@ -274,7 +304,7 @@ function App() {
   const [subscribed, setSubscribed] = useState(false)
   const [loginOpen, setLoginOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
-  const [isAuthenticated, setIsAuthenticated] = useState(() => sessionStorage.getItem('ehs-admin-session') === 'active')
+  const [isAuthenticated, setIsAuthenticated] = useState(hasAdminSession)
   const [authError, setAuthError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loginPending, setLoginPending] = useState(false)
@@ -285,23 +315,27 @@ function App() {
   useEffect(() => {
     document.documentElement.lang = lang
     document.documentElement.dir = isAr ? 'rtl' : 'ltr'
-    localStorage.setItem('ehs-lang', JSON.stringify(lang))
+    writeStorage('ehs-lang', lang)
   }, [lang, isAr])
 
   useEffect(() => {
     initializeAnalytics()
   }, [])
 
-  useEffect(() => localStorage.setItem('ehs-products', JSON.stringify(catalogProducts)), [catalogProducts])
-  useEffect(() => localStorage.setItem('ehs-cart', JSON.stringify(cart)), [cart])
-  useEffect(() => localStorage.setItem('ehs-wishlist', JSON.stringify(wishlist)), [wishlist])
+  useEffect(() => writeStorage('ehs-products', catalogProducts), [catalogProducts])
+  useEffect(() => writeStorage('ehs-cart', cart), [cart])
+  useEffect(() => writeStorage('ehs-wishlist', wishlist), [wishlist])
 
   useEffect(() => {
-    if (cart.length && sessionStorage.getItem('ehs-visited')) {
-      const timer = window.setTimeout(() => setToast(t.recovery), 900)
-      return () => window.clearTimeout(timer)
+    try {
+      if (cart.length && sessionStorage.getItem('ehs-visited')) {
+        const timer = window.setTimeout(() => setToast(t.recovery), 900)
+        return () => window.clearTimeout(timer)
+      }
+      sessionStorage.setItem('ehs-visited', 'yes')
+    } catch {
+      return undefined
     }
-    sessionStorage.setItem('ehs-visited', 'yes')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -403,12 +437,12 @@ function App() {
     const password = String(data.get('password') ?? '')
 
     try {
-      const [emailHash, passwordHash] = await Promise.all([sha256(email), sha256(password)])
-      if (emailHash !== ADMIN_EMAIL_HASH || passwordHash !== ADMIN_PASSWORD_HASH) {
+      const [emailHash, passwordHash] = await Promise.all([credentialHash(email), credentialHash(password)])
+      if (!ADMIN_EMAIL_HASHES.includes(emailHash) || !ADMIN_PASSWORD_HASHES.includes(passwordHash)) {
         setAuthError(isAr ? 'البريد الإلكتروني أو كلمة السر غير صحيحة.' : 'E-mail ou mot de passe incorrect.')
         return
       }
-      sessionStorage.setItem('ehs-admin-session', 'active')
+      saveAdminSession(true)
       setIsAuthenticated(true)
       setLoginOpen(false)
       setAccountOpen(true)
@@ -421,7 +455,7 @@ function App() {
   }
 
   const logout = () => {
-    sessionStorage.removeItem('ehs-admin-session')
+    saveAdminSession(false)
     setIsAuthenticated(false)
     setAccountOpen(false)
     setToast(isAr ? 'تم تسجيل الخروج' : 'Déconnexion réussie')
@@ -470,7 +504,7 @@ function App() {
       status: 'new',
     }
     const previousOrders = readStorage<StoreOrder[]>('ehs-orders', [])
-    localStorage.setItem('ehs-orders', JSON.stringify([...previousOrders, order]))
+    writeStorage('ehs-orders', [...previousOrders, order])
     void dispatchOrder(order)
     trackCommerceEvent('Purchase', {
       content_ids: cart.map(item => item.id),
@@ -862,18 +896,20 @@ function App() {
 
       {accountOpen && isAuthenticated && (
         <div className="overlay modal-overlay account-overlay">
-          <AdminDashboard
-            lang={lang}
-            logo={assetPath('assets/logo.png')}
-            products={catalogProducts}
-            orders={storedOrders}
-            money={money}
-            onClose={() => setAccountOpen(false)}
-            onLogout={logout}
-            onOpenStore={() => { setAccountOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
-            onAddProduct={addDashboardProduct}
-            onDeleteProduct={deleteDashboardProduct}
-          />
+          <DashboardErrorBoundary lang={lang} onClose={() => setAccountOpen(false)}>
+            <AdminDashboard
+              lang={lang}
+              logo={assetPath('assets/logo.png')}
+              products={catalogProducts}
+              orders={storedOrders}
+              money={money}
+              onClose={() => setAccountOpen(false)}
+              onLogout={logout}
+              onOpenStore={() => { setAccountOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+              onAddProduct={addDashboardProduct}
+              onDeleteProduct={deleteDashboardProduct}
+            />
+          </DashboardErrorBoundary>
         </div>
       )}
 
@@ -946,6 +982,34 @@ function ReviewCard({ text, name, place, featured = false }: { text: string; nam
       <div className="review-author"><div>{name.charAt(0)}</div><p><b>{name}</b><span>{place}</span></p><BadgeCheck /></div>
     </article>
   )
+}
+
+type DashboardErrorBoundaryProps = { children: ReactNode; lang: Lang; onClose: () => void }
+
+class DashboardErrorBoundary extends Component<DashboardErrorBoundaryProps, { hasError: boolean }> {
+  state = { hasError: false }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  resetDashboard = () => {
+    try {
+      ['ehs-landing-pages', 'ehs-dashboard-pixels', 'ehs-team', 'ehs-sheets', 'ehs-delivery', 'ehs-domain', 'ehs-api-key'].forEach(key => localStorage.removeItem(key))
+    } catch { /* Storage may be restricted. */ }
+    this.setState({ hasError: false })
+  }
+
+  render() {
+    if (!this.state.hasError) return this.props.children
+    const ar = this.props.lang === 'ar'
+    return <div className="dashboard-error-fallback" dir={ar ? 'rtl' : 'ltr'}>
+      <CircleAlert size={34} />
+      <h2>{ar ? 'تعذر فتح لوحة التحكم' : 'Impossible d’ouvrir le tableau de bord'}</h2>
+      <p>{ar ? 'قد تكون هناك إعدادات قديمة أو غير متوافقة في المتصفح. يمكنك إصلاحها دون حذف المنتجات أو الطلبات.' : 'Des paramètres anciens peuvent être incompatibles. Réinitialisez-les sans supprimer les produits ni les commandes.'}</p>
+      <div><button className="primary-button" onClick={this.resetDashboard}>{ar ? 'إصلاح وإعادة المحاولة' : 'Réparer et réessayer'}</button><button className="outline-button" onClick={this.props.onClose}>{ar ? 'العودة للمتجر' : 'Retour à la boutique'}</button></div>
+    </div>
+  }
 }
 
 export default App

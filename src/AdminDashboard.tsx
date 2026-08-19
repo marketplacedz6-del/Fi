@@ -96,6 +96,26 @@ const readLocal = <T,>(key: string, fallback: T): T => {
   }
 }
 
+const readLocalText = (key: string, fallback = '') => {
+  try { return localStorage.getItem(key) ?? fallback } catch { return fallback }
+}
+
+const writeLocal = (key: string, value: string) => {
+  try { localStorage.setItem(key, value) } catch { /* Storage may be disabled by the browser. */ }
+}
+
+const createApiKey = () => {
+  try {
+    const bytes = new Uint8Array(16)
+    globalThis.crypto?.getRandomValues?.(bytes)
+    const token = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
+    if (token && !/^0+$/.test(token)) return `ehs_live_${token.slice(0, 24)}`
+  } catch {
+    // Fall through to a compatibility-safe identifier.
+  }
+  return `ehs_live_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 14)}`
+}
+
 const initialPages: LandingPage[] = [
   { id: 1, title: 'مجموعة البيت الهادئ', slug: 'calm-home', published: true, views: 1240 },
   { id: 2, title: 'عروض نهاية الأسبوع', slug: 'weekend-offer', published: false, views: 0 },
@@ -126,8 +146,8 @@ export default function AdminDashboard({
   const [team, setTeam] = useState<TeamMember[]>(() => readLocal('ehs-team', initialTeam))
   const [sheets, setSheets] = useState<Sheet[]>(() => readLocal('ehs-sheets', []))
   const [delivery, setDelivery] = useState<Record<string, boolean>>(() => readLocal('ehs-delivery', { Yalidine: true, 'ZR Express': false, Maystro: false, Guepex: false }))
-  const [domain, setDomain] = useState(() => localStorage.getItem('ehs-domain') ?? '')
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('ehs-api-key') ?? `ehs_live_${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`)
+  const [domain, setDomain] = useState(() => readLocalText('ehs-domain'))
+  const [apiKey, setApiKey] = useState(() => readLocalText('ehs-api-key', createApiKey()))
   const [showApi, setShowApi] = useState(false)
   const [newPage, setNewPage] = useState('')
   const [pixelProvider, setPixelProvider] = useState<PixelProvider>('Meta')
@@ -137,12 +157,12 @@ export default function AdminDashboard({
   const [memberName, setMemberName] = useState('')
   const [memberEmail, setMemberEmail] = useState('')
 
-  useEffect(() => localStorage.setItem('ehs-landing-pages', JSON.stringify(pages)), [pages])
-  useEffect(() => localStorage.setItem('ehs-dashboard-pixels', JSON.stringify(pixels)), [pixels])
-  useEffect(() => localStorage.setItem('ehs-team', JSON.stringify(team)), [team])
-  useEffect(() => localStorage.setItem('ehs-sheets', JSON.stringify(sheets)), [sheets])
-  useEffect(() => localStorage.setItem('ehs-delivery', JSON.stringify(delivery)), [delivery])
-  useEffect(() => localStorage.setItem('ehs-api-key', apiKey), [apiKey])
+  useEffect(() => writeLocal('ehs-landing-pages', JSON.stringify(pages)), [pages])
+  useEffect(() => writeLocal('ehs-dashboard-pixels', JSON.stringify(pixels)), [pixels])
+  useEffect(() => writeLocal('ehs-team', JSON.stringify(team)), [team])
+  useEffect(() => writeLocal('ehs-sheets', JSON.stringify(sheets)), [sheets])
+  useEffect(() => writeLocal('ehs-delivery', JSON.stringify(delivery)), [delivery])
+  useEffect(() => writeLocal('ehs-api-key', apiKey), [apiKey])
 
   useEffect(() => {
     if (!notice) return
@@ -242,7 +262,7 @@ export default function AdminDashboard({
   }
 
   const regenerateKey = () => {
-    setApiKey(`ehs_live_${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`)
+    setApiKey(createApiKey())
     notify(l('تم إنشاء مفتاح API جديد', 'Nouvelle clé API créée'))
   }
 
@@ -383,7 +403,7 @@ export default function AdminDashboard({
     <section className="dashboard-page">
       <PageTitle icon={<Settings />} title={l('الإعدادات المتقدمة', 'Paramètres avancés')} text={l('النطاق، API، اللغات، الأمان وتطوير الميزات.', 'Domaine, API, langues, sécurité et développements.')} />
       <div className="settings-grid">
-        <div className="dashboard-card settings-card"><CardHead title={l('النطاق المخصص', 'Domaine personnalisé')} subtitle={l('بدون علامة DZBuild', 'Sans marque DZBuild')} action={<Globe2 />} /><label>{l('اسم النطاق', 'Nom de domaine')}</label><div className="domain-input"><span>https://</span><input value={domain} onChange={e => setDomain(e.target.value)} placeholder="elegance-home.dz" dir="ltr" /><button onClick={() => { localStorage.setItem('ehs-domain', domain); notify(l('تم حفظ النطاق', 'Domaine enregistré')) }}><Check /></button></div><p className="setting-help"><CircleCheck /> {l('SSL مجاني وتفعيل تلقائي بعد ربط DNS.', 'SSL gratuit après connexion DNS.')}</p></div>
+        <div className="dashboard-card settings-card"><CardHead title={l('النطاق المخصص', 'Domaine personnalisé')} subtitle={l('بدون علامة DZBuild', 'Sans marque DZBuild')} action={<Globe2 />} /><label>{l('اسم النطاق', 'Nom de domaine')}</label><div className="domain-input"><span>https://</span><input value={domain} onChange={e => setDomain(e.target.value)} placeholder="elegance-home.dz" dir="ltr" /><button onClick={() => { writeLocal('ehs-domain', domain); notify(l('تم حفظ النطاق', 'Domaine enregistré')) }}><Check /></button></div><p className="setting-help"><CircleCheck /> {l('SSL مجاني وتفعيل تلقائي بعد ربط DNS.', 'SSL gratuit après connexion DNS.')}</p></div>
         <div className="dashboard-card settings-card"><CardHead title={l('الوصول المتقدم إلى API', 'Accès API avancé')} subtitle="REST API · v1" action={<Code2 />} /><label>Live API Key</label><div className="api-key"><code dir="ltr">{showApi ? apiKey : `${apiKey.slice(0, 10)}••••••••••••••`}</code><button onClick={() => setShowApi(value => !value)}><Eye /></button><button onClick={() => { navigator.clipboard?.writeText(apiKey); notify(l('تم نسخ المفتاح', 'Clé copiée')) }}><Copy /></button></div><button className="regenerate-key" onClick={regenerateKey}><RefreshCw /> {l('إنشاء مفتاح جديد', 'Régénérer la clé')}</button></div>
         <div className="dashboard-card settings-card"><CardHead title={l('اللغات', 'Langues')} subtitle={l('متجر متعدد اللغات', 'Boutique multilingue')} action={<Languages />} /><div className="language-setting"><div><span>ع</span><p><b>العربية</b><small>RTL · {l('افتراضية', 'Par défaut')}</small></p></div><CircleCheck /></div><div className="language-setting"><div><span>FR</span><p><b>Français</b><small>LTR · Active</small></p></div><CircleCheck /></div></div>
         <div className="dashboard-card settings-card sla-card"><CardHead title={l('حالة الخدمة', 'État du service')} subtitle="SLA 99.9%" action={<ShieldCheck />} /><div className="uptime"><div><b>99.98%</b><span>{l('وقت التشغيل', 'Disponibilité')}</span></div><Radio /></div><ul><li><i /> Storefront API <span>Operational</span></li><li><i /> Orders & CRM <span>Operational</span></li><li><i /> Delivery webhooks <span>Operational</span></li></ul></div>
