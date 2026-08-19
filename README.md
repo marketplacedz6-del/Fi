@@ -74,6 +74,8 @@ git push
 
 ## النشر المجاني على Netlify
 
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/marketplacedz6-del/Fi)
+
 ملف `netlify.toml` جاهز ولا يحتاج إعداداً يدوياً للبناء:
 
 1. اختر **Add new site → Import an existing project** في Netlify.
