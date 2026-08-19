@@ -300,6 +300,7 @@ function App() {
   const [catalogProducts, setCatalogProducts] = useState<Product[]>(() => readStorage<Product[]>('ehs-products', defaultProducts))
   const [cart, setCart] = useState<CartItem[]>(() => readStorage<CartItem[]>('ehs-cart', []))
   const [wishlist, setWishlist] = useState<number[]>(() => readStorage<number[]>('ehs-wishlist', []))
+  const [orders, setOrders] = useState<StoreOrder[]>(() => readStorage<StoreOrder[]>('ehs-orders', []))
   const [category, setCategory] = useState<Category>('all')
   const [sort, setSort] = useState('newest')
   const [search, setSearch] = useState('')
@@ -337,6 +338,7 @@ function App() {
   useEffect(() => writeStorage('ehs-products', catalogProducts), [catalogProducts])
   useEffect(() => writeStorage('ehs-cart', cart), [cart])
   useEffect(() => writeStorage('ehs-wishlist', wishlist), [wishlist])
+  useEffect(() => writeStorage('ehs-orders', orders), [orders])
 
   // Keep locally saved carts valid when a product is deleted, unpublished, or its stock changes.
   useEffect(() => {
@@ -393,7 +395,17 @@ function App() {
     return product ? [{ ...product, quantity: item.quantity }] : []
   })
   const subtotal = cartProducts.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const storedOrders = readStorage<StoreOrder[]>('ehs-orders', [])
+  const updateOrderStatus = (id: string, status: StoreOrder['status']) => {
+    const previous = orders.find(order => order.id === id)
+    // A cancelled order returns its reserved inventory exactly once.
+    if (previous && previous.status !== 'cancelled' && status === 'cancelled') {
+      setCatalogProducts(current => current.map(product => {
+        const quantity = previous.items.find(item => item.id === product.id)?.quantity ?? 0
+        return quantity && product.stock !== undefined ? { ...product, stock: product.stock + quantity } : product
+      }))
+    }
+    setOrders(current => current.map(order => order.id === id ? { ...order, status } : order))
+  }
 
   const filteredProducts = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -591,8 +603,7 @@ function App() {
       date: new Date().toISOString(),
       status: 'new',
     }
-    const previousOrders = readStorage<StoreOrder[]>('ehs-orders', [])
-    writeStorage('ehs-orders', [...previousOrders, order])
+    setOrders(current => [...current, order])
     void dispatchOrder(order)
     trackCommerceEvent('Purchase', {
       content_ids: cart.map(item => item.id),
@@ -995,8 +1006,9 @@ function App() {
               lang={lang}
               logo={assetPath('assets/logo.png')}
               products={catalogProducts}
-              orders={storedOrders}
+              orders={orders}
               cartCount={cartCount}
+              onUpdateOrderStatus={updateOrderStatus}
               money={money}
               onClose={lockDashboard}
               onLogout={logout}

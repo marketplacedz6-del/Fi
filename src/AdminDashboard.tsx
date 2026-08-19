@@ -101,6 +101,7 @@ type AdminDashboardProps = {
   products: DashboardProduct[]
   orders: StoreOrder[]
   cartCount: number
+  onUpdateOrderStatus: (id: string, status: StoreOrder['status']) => void
   money: (value: number) => string
   onClose: () => void
   onLogout: () => void
@@ -166,7 +167,7 @@ const providerClass: Record<PixelProvider, string> = {
 }
 
 export default function AdminDashboard({
-  lang, logo, products, orders, cartCount, money, onClose, onLogout, onOpenStore, onAddProduct, onUpdateProduct, onDuplicateProduct, onDeleteProducts, onSetProductsStatus, onRestoreProducts,
+  lang, logo, products, orders, cartCount, onUpdateOrderStatus, money, onClose, onLogout, onOpenStore, onAddProduct, onUpdateProduct, onDuplicateProduct, onDeleteProducts, onSetProductsStatus, onRestoreProducts,
 }: AdminDashboardProps) {
   const ar = lang === 'ar'
   const l = (arabic: string, french: string) => ar ? arabic : french
@@ -232,6 +233,8 @@ export default function AdminDashboard({
   }, [])
 
   const revenue = orders.reduce((sum, order) => sum + (Number(order.total) || 0), 0)
+  const newOrders = orders.filter(order => order.status === 'new').length
+  const deliveryOrders = orders.filter(order => order.status === 'delivery').length
   const now = new Date()
   const validOrderDate = (value: string) => {
     const parsed = new Date(value)
@@ -583,10 +586,10 @@ export default function AdminDashboard({
   const renderOrders = () => (
     <section className="dashboard-page">
       <PageTitle icon={<PackageCheck />} title={l('إدارة الطلبات', 'Gestion des commandes')} text={l('طلبات غير محدودة ومتابعة كاملة من التأكيد حتى التسليم.', 'Commandes illimitées, du suivi à la livraison.')} />
-      <div className="metric-strip"><Metric label={l('كل الطلبات', 'Toutes')} value={orders.length} /><Metric label={l('جديدة', 'Nouvelles')} value={orders.length} warning /><Metric label={l('قيد التوصيل', 'En livraison')} value={0} /><Metric label={l('الإيرادات', 'Revenus')} value={money(revenue)} green /></div>
+      <div className="metric-strip"><Metric label={l('كل الطلبات', 'Toutes')} value={orders.length} /><Metric label={l('جديدة', 'Nouvelles')} value={newOrders} warning /><Metric label={l('قيد التوصيل', 'En livraison')} value={deliveryOrders} /><Metric label={l('الإيرادات', 'Revenus')} value={money(revenue)} green /></div>
       <div className="dashboard-card data-card">
         <div className="table-tools"><label><Search /><input value={orderSearch} onChange={e => setOrderSearch(e.target.value)} placeholder={l('رقم الطلب، الزبون أو الهاتف...', 'Commande, client ou téléphone...')} /></label><button className="smart-secondary"><RefreshCw /> {l('تحديث', 'Actualiser')}</button></div>
-        <OrderTable orders={filteredOrders.slice().reverse()} ar={ar} money={money} emptyText={l('لا توجد طلبات مطابقة.', 'Aucune commande correspondante.')} expanded />
+        <OrderTable orders={filteredOrders.slice().reverse()} ar={ar} money={money} emptyText={l('لا توجد طلبات مطابقة.', 'Aucune commande correspondante.')} expanded onUpdateStatus={(id, status) => { onUpdateOrderStatus(id, status); notify(l('تم تحديث حالة الطلب', 'Statut de la commande mis à jour')) }} />
       </div>
     </section>
   )
@@ -740,9 +743,17 @@ function Metric({ label, value, green = false, warning = false }: { label: strin
   return <div><span>{label}</span><b className={green ? 'green' : warning ? 'warning' : ''}>{value}</b></div>
 }
 
-function OrderTable({ orders, ar, money, emptyText, expanded = false }: { orders: StoreOrder[]; ar: boolean; money: (v: number) => string; emptyText: string; expanded?: boolean }) {
+function OrderTable({ orders, ar, money, emptyText, expanded = false, onUpdateStatus }: { orders: StoreOrder[]; ar: boolean; money: (v: number) => string; emptyText: string; expanded?: boolean; onUpdateStatus?: (id: string, status: StoreOrder['status']) => void }) {
   if (!orders.length) return <DashboardEmpty icon={<PackageCheck />} text={emptyText} />
-  return <div className={`smart-order-list ${expanded ? 'expanded' : ''}`}>{orders.map((order, index) => <div className="smart-order-row" key={order.id}><div className={`order-customer-avatar c${index % 4}`}>{String(order.customer.name ?? 'C').charAt(0)}</div><p><b>{String(order.customer.name ?? (ar ? 'زبون' : 'Client'))}</b><span dir="ltr">{order.id}</span></p>{expanded && <small dir="ltr">{String(order.customer.phone ?? '—')}</small>}<strong>{money(order.total)}</strong><em>{ar ? 'طلب جديد' : 'Nouvelle'}</em><button><MoreHorizontal /></button></div>)}</div>
+  const statuses = [
+    { value: 'new', ar: 'طلب جديد', fr: 'Nouvelle' },
+    { value: 'confirmed', ar: 'مؤكد', fr: 'Confirmée' },
+    { value: 'delivery', ar: 'قيد التوصيل', fr: 'En livraison' },
+    { value: 'delivered', ar: 'تم التسليم', fr: 'Livrée' },
+    { value: 'cancelled', ar: 'ملغى', fr: 'Annulée' },
+  ]
+  const labelFor = (status: string) => statuses.find(item => item.value === status)?.[ar ? 'ar' : 'fr'] ?? (ar ? 'طلب جديد' : 'Nouvelle')
+  return <div className={`smart-order-list ${expanded ? 'expanded' : ''}`}>{orders.map((order, index) => <div className="smart-order-row" key={order.id}><div className={`order-customer-avatar c${index % 4}`}>{String(order.customer.name ?? 'C').charAt(0)}</div><p><b>{String(order.customer.name ?? (ar ? 'زبون' : 'Client'))}</b><span dir="ltr">{order.id}</span></p>{expanded && <small dir="ltr">{String(order.customer.phone ?? '—')}</small>}<strong>{money(order.total)}</strong>{expanded && onUpdateStatus ? <select className={`order-status-select ${order.status}`} value={order.status} onChange={event => onUpdateStatus(order.id, event.target.value)} aria-label={ar ? 'حالة الطلب' : 'Statut de la commande'}>{statuses.map(status => <option key={status.value} value={status.value}>{ar ? status.ar : status.fr}</option>)}</select> : <em className={order.status}>{labelFor(order.status)}</em>}<button aria-label={ar ? 'تفاصيل الطلب' : 'Détails de la commande'}><MoreHorizontal /></button></div>)}</div>
 }
 
 function DashboardEmpty({ icon, text }: { icon: ReactNode; text: string }) {

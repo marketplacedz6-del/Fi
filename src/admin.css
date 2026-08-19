@@ -238,7 +238,9 @@
 .smart-order-row b { font-size: 7px; }
 .smart-order-row span, .smart-order-row > small { color: #98a2b3; font: 6px Arial; }
 .smart-order-row strong { color: #344054; font-size: 7px; }
-.smart-order-row em { padding: 4px 5px; background: #edf7f2; color: #348265; font-size: 5.8px; font-style: normal; text-align: center; }
+.smart-order-row em, .order-status-select { padding: 4px 5px; background: #edf7f2; color: #348265; font-size: 5.8px; font-style: normal; text-align: center; }
+.order-status-select { min-width: 68px; border: 1px solid #dbe9e1; outline: 0; cursor: pointer; }
+.order-status-select.new { background: #fff5df; color: #a16b22; border-color: #f0dfba; }.order-status-select.confirmed { background: #e9f1fb; color: #3e6f9f; border-color: #d7e4f4; }.order-status-select.delivery { background: #f0eafe; color: #735a9c; border-color: #e2d8f5; }.order-status-select.delivered { background: #edf7f2; color: #348265; }.order-status-select.cancelled { background: #faeaea; color: #a84f4f; border-color: #f0d5d5; }
 .smart-order-row button { width: 20px; height: 20px; border: 0; background: transparent; color: #98a2b3; }
 .smart-order-row button svg { width: 13px; }
 .usage-card { display: flex; flex-direction: column; }
@@ -733,8 +735,10 @@
   .product-table-row > span, .product-table-row > em { display: none; }
   .product-table-row > div { min-width: 0; }
   .product-table-row img { width: 42px; height: 42px; }
-  .smart-order-row.expanded { grid-template-columns: 29px 1fr auto 20px; }
+  .smart-order-row.expanded { grid-template-columns: 29px 1fr auto 20px; min-height: 70px; }
   .smart-order-row.expanded > small, .smart-order-row.expanded > em { display: none; }
+  .smart-order-row.expanded .order-status-select { grid-column: 2 / -1; grid-row: 2; width: 100%; }
+  .smart-order-row.expanded > button { grid-column: 4; grid-row: 1; }
   .customer-row { grid-template-columns: 31px 1fr auto 20px; }
   .customer-row > small { display: none; }
   .landing-grid { grid-template-columns: 1fr; }
