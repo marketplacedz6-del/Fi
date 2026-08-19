@@ -894,6 +894,7 @@ function App() {
               logo={assetPath('assets/logo.png')}
               products={catalogProducts}
               orders={storedOrders}
+              cartCount={cartCount}
               money={money}
               onClose={lockDashboard}
               onLogout={logout}

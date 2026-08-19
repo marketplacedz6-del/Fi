@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleAlert,
+  Clock3,
   CircleCheck,
   ClipboardList,
   Code2,
@@ -71,6 +72,7 @@ type AdminDashboardProps = {
   logo: string
   products: DashboardProduct[]
   orders: StoreOrder[]
+  cartCount: number
   money: (value: number) => string
   onClose: () => void
   onLogout: () => void
@@ -131,7 +133,7 @@ const providerClass: Record<PixelProvider, string> = {
 }
 
 export default function AdminDashboard({
-  lang, logo, products, orders, money, onClose, onLogout, onOpenStore, onAddProduct, onDeleteProduct, onRestoreProducts,
+  lang, logo, products, orders, cartCount, money, onClose, onLogout, onOpenStore, onAddProduct, onDeleteProduct, onRestoreProducts,
 }: AdminDashboardProps) {
   const ar = lang === 'ar'
   const l = (arabic: string, french: string) => ar ? arabic : french
@@ -171,7 +173,49 @@ export default function AdminDashboard({
     return () => window.clearTimeout(timer)
   }, [notice])
 
-  const revenue = orders.reduce((sum, order) => sum + order.total, 0)
+  const revenue = orders.reduce((sum, order) => sum + (Number(order.total) || 0), 0)
+  const now = new Date()
+  const validOrderDate = (value: string) => {
+    const parsed = new Date(value)
+    return Number.isNaN(parsed.getTime()) ? now : parsed
+  }
+  const dailySales = useMemo(() => Array.from({ length: 7 }, (_, index) => {
+    const day = new Date()
+    day.setHours(0, 0, 0, 0)
+    day.setDate(day.getDate() - (6 - index))
+    const next = new Date(day)
+    next.setDate(next.getDate() + 1)
+    const dayOrders = orders.filter(order => {
+      const date = validOrderDate(order.date)
+      return date >= day && date < next
+    })
+    return {
+      date: day,
+      label: new Intl.DateTimeFormat(ar ? 'ar-DZ' : 'fr-FR', { weekday: 'short' }).format(day),
+      orders: dayOrders.length,
+      revenue: dayOrders.reduce((sum, order) => sum + (Number(order.total) || 0), 0),
+    }
+  }), [orders, ar]) // eslint-disable-line react-hooks/exhaustive-deps
+  const currentWeekOrders = dailySales.reduce((sum, day) => sum + day.orders, 0)
+  const currentWeekRevenue = dailySales.reduce((sum, day) => sum + day.revenue, 0)
+  const averageOrder = orders.length ? revenue / orders.length : 0
+  const maxDailyRevenue = Math.max(1, ...dailySales.map(day => day.revenue))
+  const activePixels = pixels.filter(pixel => pixel.active).length
+  const connectedDelivery = Object.values(delivery).filter(Boolean).length
+  const publishedPages = pages.filter(page => page.published).length
+  const readinessScore = Math.min(100, 72 + (activePixels ? 8 : 0) + (connectedDelivery > 1 ? 6 : 0) + (domain ? 7 : 0) + (sheets.length ? 7 : 0))
+  const landingViews = pages.reduce((sum, page) => sum + page.views, 0)
+  const conversionRate = landingViews ? orders.length / landingViews * 100 : 0
+  const todayLabel = new Intl.DateTimeFormat(ar ? 'ar-DZ' : 'fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).format(now)
+
+  const topProducts = useMemo(() => {
+    const sold = new Map<number, number>()
+    orders.forEach(order => order.items?.forEach(item => sold.set(item.id, (sold.get(item.id) ?? 0) + (Number(item.quantity) || 0))))
+    return products.map(product => ({ ...product, sold: sold.get(product.id) ?? 0 }))
+      .sort((a, b) => b.sold - a.sold || b.price - a.price)
+      .slice(0, 4)
+  }, [orders, products])
+
   const customers = useMemo(() => {
     const unique = new Map<string, { name: string; phone: string; orders: number; spent: number }>()
     orders.forEach(order => {
@@ -181,7 +225,7 @@ export default function AdminDashboard({
         name: String(order.customer.name ?? l('زبون', 'Client')),
         phone,
         orders: (previous?.orders ?? 0) + 1,
-        spent: (previous?.spent ?? 0) + order.total,
+        spent: (previous?.spent ?? 0) + (Number(order.total) || 0),
       })
     })
     return Array.from(unique.values())
@@ -268,58 +312,95 @@ export default function AdminDashboard({
   }
 
   const renderOverview = () => (
-    <>
-      <div className="smart-welcome">
+    <section className="overview-page">
+      <div className="smart-welcome overview-welcome">
         <div>
           <p><Sparkles /> {l('مركز Elegance الذكي', 'Centre intelligent Elegance')}</p>
-          <h1>{l('صباح الأناقة، وليد', 'Bonjour Walid')}</h1>
-          <span>{l('كل شيء تحت السيطرة. إليك ما يحدث في متجرك اليوم.', 'Tout est sous contrôle. Voici ce qui se passe dans votre boutique.')}</span>
+          <h1>{l('مرحباً وليد، متجرك أمامك بوضوح', 'Bonjour Walid, votre boutique en un coup d’œil')}</h1>
+          <span>{l('بيانات حقيقية ومحدّثة من الطلبات والمنتجات والتكاملات المحفوظة.', 'Des données réelles issues de vos commandes, produits et intégrations.')}</span>
+          <div className="overview-date"><Clock3 /> {todayLabel}</div>
         </div>
-        <div className="store-health"><div className="health-ring"><b>99.9%</b><span>SLA</span></div><p><CircleCheck /> {l('جميع الأنظمة تعمل', 'Tous les systèmes opérationnels')}</p></div>
+        <div className="store-health">
+          <div className="health-ring"><b>{readinessScore}%</b><span>{l('جاهزية', 'Prêt')}</span></div>
+          <p><CircleCheck /> {l('المتجر يعمل بصورة طبيعية', 'Boutique opérationnelle')}</p>
+        </div>
       </div>
 
-      <div className="smart-stat-grid">
-        <SmartStat icon={<ShoppingBag />} label={l('إجمالي المنتجات', 'Total produits')} value={products.length.toString()} trend="+12%" color="gold" hint={l('غير محدود', 'Illimité')} />
-        <SmartStat icon={<ClipboardList />} label={l('إجمالي الطلبات', 'Total commandes')} value={orders.length.toString()} trend="+8.4%" color="blue" hint={l('غير محدود', 'Illimité')} />
-        <SmartStat icon={<TrendingUp />} label={l('إجمالي المبيعات', 'Chiffre d’affaires')} value={money(revenue)} trend="+18%" color="green" hint={l('هذا الشهر', 'Ce mois')} />
-        <SmartStat icon={<UsersRound />} label={l('عملاء CRM', 'Clients CRM')} value={customers.length.toString()} trend="+5.2%" color="purple" hint={l('ملفات موحدة', 'Profils unifiés')} />
+      <div className="smart-stat-grid overview-stats">
+        <SmartStat icon={<ShoppingBag />} label={l('المنتجات الحالية', 'Produits actuels')} value={products.length.toString()} trend="∞" color="gold" hint={l('لا يوجد حد أقصى', 'Aucune limite')} />
+        <SmartStat icon={<ClipboardList />} label={l('إجمالي الطلبات', 'Total commandes')} value={orders.length.toString()} trend={`+${currentWeekOrders}`} color="blue" hint={l('خلال آخر 7 أيام', 'Sur les 7 derniers jours')} />
+        <SmartStat icon={<TrendingUp />} label={l('إجمالي المبيعات', 'Chiffre d’affaires')} value={money(revenue)} trend={money(currentWeekRevenue)} color="green" hint={l('مبيعات حقيقية مسجلة', 'Ventes enregistrées')} />
+        <SmartStat icon={<UsersRound />} label={l('عملاء CRM', 'Clients CRM')} value={customers.length.toString()} trend={`${conversionRate.toFixed(1)}%`} color="purple" hint={l('معدل التحويل', 'Taux de conversion')} />
       </div>
 
-      <div className="smart-overview-grid">
-        <section className="dashboard-card revenue-card">
-          <CardHead title={l('أداء المبيعات', 'Performance des ventes')} subtitle={l('آخر 7 أيام', '7 derniers jours')} action={<button><MoreHorizontal /></button>} />
-          <div className="revenue-summary"><p><span>{l('المبيعات', 'Ventes')}</span><b>{money(revenue || 148500)}</b></p><em><TrendingUp /> 18.6%</em></div>
-          <div className="smart-chart">
-            {[32, 48, 39, 68, 54, 81, 72].map((height, index) => <div key={index}><span style={{ height: `${height}%` }} className={index === 5 ? 'peak' : ''} /><small>{['S', 'M', 'T', 'W', 'T', 'F', 'S'][index]}</small></div>)}
-            <svg viewBox="0 0 700 170" preserveAspectRatio="none"><path d="M0,135 C75,115 85,130 145,105 S240,125 285,75 S370,95 430,55 S530,82 575,28 S650,55 700,35" /></svg>
+      <div className="smart-overview-grid overview-primary-grid">
+        <section className="dashboard-card revenue-card upgraded-revenue-card">
+          <CardHead title={l('المبيعات خلال آخر 7 أيام', 'Ventes des 7 derniers jours')} subtitle={l('يُحتسب من الطلبات المسجلة فقط', 'Calculé uniquement depuis les commandes')} action={<span className="live-data-pill"><Radio /> LIVE</span>} />
+          <div className="revenue-summary enhanced-summary">
+            <p><span>{l('مبيعات الفترة', 'Ventes de la période')}</span><b>{money(currentWeekRevenue)}</b></p>
+            <div><p><span>{l('متوسط الطلب', 'Panier moyen')}</span><strong>{money(averageOrder)}</strong></p><p><span>{l('عدد الطلبات', 'Commandes')}</span><strong>{currentWeekOrders}</strong></p></div>
+          </div>
+          <div className={`real-sales-chart ${currentWeekRevenue === 0 ? 'is-empty' : ''}`}>
+            <div className="chart-y-axis"><span>{money(maxDailyRevenue)}</span><span>{money(maxDailyRevenue / 2)}</span><span>{money(0)}</span></div>
+            <div className="sales-bars">
+              {dailySales.map((day, index) => <div className="sales-day" key={day.date.toISOString()} title={`${day.label}: ${money(day.revenue)}`}><div className="bar-track"><span className={index === 6 ? 'today' : ''} style={{ height: `${Math.max(day.revenue ? 8 : 2, day.revenue / maxDailyRevenue * 100)}%` }}><i>{day.orders}</i></span></div><b>{day.label}</b><small>{day.orders}</small></div>)}
+            </div>
+            {currentWeekRevenue === 0 && <div className="chart-empty-message"><BarChart3 /><p><b>{l('لا توجد مبيعات في هذه الفترة', 'Aucune vente sur cette période')}</b><span>{l('سيظهر الرسم تلقائياً عند وصول أول طلب.', 'Le graphique apparaîtra avec la première commande.')}</span></p></div>}
           </div>
         </section>
 
-        <section className="dashboard-card ai-card">
-          <CardHead title={l('مساعد Elegance الذكي', 'Assistant intelligent')} subtitle="AI INSIGHTS" action={<BrainCircuit />} />
-          <div className="ai-score"><div><Sparkles /><b>3</b></div><p><strong>{l('فرص نمو مكتشفة', 'Opportunités détectées')}</strong><span>{l('بناءً على أداء متجرك', 'Basé sur vos performances')}</span></p></div>
+        <section className="dashboard-card ai-card upgraded-ai-card">
+          <CardHead title={l('مساعد Elegance الذكي', 'Assistant intelligent')} subtitle={l('تحليل مباشر', 'Analyse en direct')} action={<BrainCircuit />} />
+          <div className="ai-score"><div><Sparkles /><b>4</b></div><p><strong>{l('إجراءات مقترحة الآن', 'Actions recommandées')}</strong><span>{l('مرتبة حسب تأثيرها على المتجر', 'Classées par impact sur la boutique')}</span></p></div>
           <div className="insight-list">
-            <Insight icon={<CircleAlert />} title={l('سلات تحتاج للاسترداد', 'Paniers à récupérer')} text={l('فعّل رسالة تذكير لرفع التحويل.', 'Activez un rappel pour convertir plus.')} action={() => switchTab('marketing')} />
-            <Insight icon={<TrendingUp />} title={l('منتجك الأقوى', 'Votre produit vedette')} text={l('صينية أوريانا تحقق أعلى اهتمام.', 'Le plateau Oriana attire le plus.')} action={() => switchTab('products')} />
-            <Insight icon={<Truck />} title={l('تحسين التوصيل', 'Optimiser la livraison')} text={l('اربط شركة توصيل إضافية.', 'Connectez un second transporteur.')} action={() => switchTab('integrations')} />
+            <Insight icon={cartCount ? <CircleAlert /> : <CircleCheck />} title={cartCount ? l(`${cartCount} عناصر في سلة غير مكتملة`, `${cartCount} articles dans un panier`) : l('السلات المتروكة تحت السيطرة', 'Paniers abandonnés maîtrisés')} text={cartCount ? l('راجع الاسترداد وارسل تذكيراً للعميل.', 'Activez un rappel de récupération.') : l('لا توجد سلات معلقة في هذا المتصفح.', 'Aucun panier en attente dans ce navigateur.')} action={() => switchTab('marketing')} />
+            <Insight icon={<Target />} title={activePixels ? l(`${activePixels} بيكسل نشط`, `${activePixels} pixel(s) actif(s)`) : l('التتبع غير مفعّل', 'Suivi non configuré')} text={activePixels ? l('أحداث المتجر جاهزة للإرسال.', 'Les événements sont prêts à être envoyés.') : l('أضف Meta أو TikTok Pixel لقياس الحملات.', 'Ajoutez Meta ou TikTok Pixel.')} action={() => switchTab('marketing')} />
+            <Insight icon={<Truck />} title={connectedDelivery > 1 ? l('التوصيل متعدد الشركات', 'Livraison multi-transporteurs') : l('اربط شركة توصيل ثانية', 'Connectez un second transporteur')} text={l(`${connectedDelivery} شركة متصلة حالياً.`, `${connectedDelivery} transporteur(s) connecté(s).`)} action={() => switchTab('integrations')} />
+            <Insight icon={<PanelTop />} title={l(`${publishedPages} صفحات منشورة`, `${publishedPages} pages publiées`)} text={l('أنشئ صفحة عرض مخصصة للحملة القادمة.', 'Créez une page pour votre prochaine campagne.')} action={() => switchTab('pages')} />
           </div>
         </section>
       </div>
 
-      <div className="smart-bottom-grid">
+      <div className="smart-bottom-grid overview-orders-grid">
         <section className="dashboard-card latest-orders-card">
-          <CardHead title={l('أحدث الطلبات', 'Commandes récentes')} subtitle={`${orders.length} ${l('طلب', 'commandes')}`} action={<button onClick={() => switchTab('orders')}>{l('عرض الكل', 'Tout voir')} {ar ? <ChevronLeft /> : <ChevronRight />}</button>} />
-          <OrderTable orders={orders.slice(-4).reverse()} ar={ar} money={money} emptyText={l('ستظهر الطلبات الجديدة هنا.', 'Les nouvelles commandes apparaîtront ici.')} />
+          <CardHead title={l('أحدث الطلبات', 'Commandes récentes')} subtitle={`${orders.length} ${l('طلب مسجل', 'commande(s) enregistrée(s)')}`} action={<button onClick={() => switchTab('orders')}>{l('إدارة الطلبات', 'Gérer')} {ar ? <ChevronLeft /> : <ChevronRight />}</button>} />
+          <OrderTable orders={orders.slice(-4).reverse()} ar={ar} money={money} emptyText={l('لا توجد طلبات بعد. نفّذ طلباً تجريبياً من المتجر لاختبار التدفق.', 'Aucune commande. Passez une commande test depuis la boutique.')} />
         </section>
-        <section className="dashboard-card usage-card">
-          <CardHead title={l('استخدام باقتك', 'Utilisation du forfait')} subtitle={l('باقة Elite', 'Forfait Elite')} action={<Crown />} />
-          <Usage label={l('الموظفون', 'Équipe')} value={team.length} total={25} />
-          <Usage label="Google Sheets" value={sheets.length} total={30} />
-          <Usage label={l('المنتجات', 'Produits')} value={products.length} unlimited />
-          <Usage label={l('الطلبات', 'Commandes')} value={orders.length} unlimited />
+        <section className="dashboard-card usage-card overview-health-card">
+          <CardHead title={l('جاهزية المميزات', 'État des fonctionnalités')} subtitle={`${readinessScore}%`} action={<ShieldCheck />} />
+          <ConnectionStatus label={l('التوصيل', 'Livraison')} value={`${connectedDelivery}/4`} active={connectedDelivery > 0} />
+          <ConnectionStatus label="Pixels" value={activePixels.toString()} active={activePixels > 0} />
+          <ConnectionStatus label="Google Sheets" value={`${sheets.length}/30`} active={sheets.length > 0} />
+          <ConnectionStatus label={l('النطاق المخصص', 'Domaine')} value={domain || l('غير مربوط', 'Non connecté')} active={Boolean(domain)} />
         </section>
       </div>
-    </>
+
+      <div className="overview-detail-grid">
+        <section className="dashboard-card funnel-card">
+          <CardHead title={l('مسار التحويل', 'Tunnel de conversion')} subtitle={l('من الزيارة إلى الطلب', 'De la visite à la commande')} action={<BarChart3 />} />
+          <FunnelStep label={l('مشاهدات صفحات الهبوط', 'Vues des landing pages')} value={landingViews} percent={100} color="navy" />
+          <FunnelStep label={l('عناصر في السلة', 'Articles au panier')} value={cartCount} percent={landingViews ? Math.min(100, cartCount / landingViews * 100) : 0} color="gold" />
+          <FunnelStep label={l('طلبات مكتملة', 'Commandes finalisées')} value={orders.length} percent={landingViews ? Math.min(100, orders.length / landingViews * 100) : 0} color="green" />
+          <div className="conversion-total"><span>{l('معدل التحويل الفعلي', 'Taux de conversion réel')}</span><b>{conversionRate.toFixed(2)}%</b></div>
+        </section>
+
+        <section className="dashboard-card top-products-card">
+          <CardHead title={l('أفضل المنتجات', 'Meilleurs produits')} subtitle={l('حسب الكمية المباعة', 'Selon les quantités vendues')} action={<button onClick={() => switchTab('products')}>{l('الكتالوج', 'Catalogue')} {ar ? <ChevronLeft /> : <ChevronRight />}</button>} />
+          <div className="top-products-list">{topProducts.map((product, index) => <div className="top-product-row" key={product.id}><span>{index + 1}</span><img src={product.image} alt="" /><p><b>{product.name[lang]}</b><small>{product.sold} {l('مباع', 'vendu(s)')}</small></p><strong>{money(product.price * product.sold)}</strong></div>)}</div>
+        </section>
+
+        <section className="dashboard-card quick-center-card">
+          <CardHead title={l('إجراءات سريعة', 'Actions rapides')} subtitle={l('اختصارات الإدارة', 'Raccourcis')} action={<Zap />} />
+          <div className="overview-actions">
+            <OverviewAction icon={<Plus />} label={l('إضافة منتج', 'Ajouter produit')} onClick={() => { switchTab('products'); setAddProductOpen(true) }} />
+            <OverviewAction icon={<PackageCheck />} label={l('عرض الطلبات', 'Voir commandes')} onClick={() => switchTab('orders')} />
+            <OverviewAction icon={<PanelTop />} label={l('صفحة هبوط', 'Landing page')} onClick={() => switchTab('pages')} />
+            <OverviewAction icon={<Target />} label={l('إضافة Pixel', 'Ajouter Pixel')} onClick={() => switchTab('marketing')} />
+          </div>
+          <button className="overview-support-button" onClick={() => window.open('https://wa.me/213555000000', '_blank')}><Headphones /><p><b>{l('الدعم المباشر متاح', 'Support direct disponible')}</b><span>24/7 · Online</span></p><ExternalLink /></button>
+        </section>
+      </div>
+    </section>
   )
 
   const renderProducts = () => (
@@ -454,6 +535,18 @@ export default function AdminDashboard({
       {notice && <div className="dashboard-toast"><CircleCheck /> {notice}</div>}
     </div>
   )
+}
+
+function ConnectionStatus({ label, value, active }: { label: string; value: string; active: boolean }) {
+  return <div className="connection-status"><div><i className={active ? 'active' : ''} /><span>{label}</span></div><b title={value}>{value}</b><em className={active ? 'active' : ''}>{active ? <CircleCheck /> : <CircleAlert />}</em></div>
+}
+
+function FunnelStep({ label, value, percent, color }: { label: string; value: number; percent: number; color: string }) {
+  return <div className="funnel-step"><div><span>{label}</span><b>{new Intl.NumberFormat('fr-DZ').format(value)}</b></div><div><i className={color} style={{ width: `${Math.max(value ? 5 : 0, percent)}%` }} /></div></div>
+}
+
+function OverviewAction({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
+  return <button className="overview-action" onClick={onClick}><div>{icon}</div><span>{label}</span><ChevronLeft /></button>
 }
 
 function SmartStat({ icon, label, value, trend, color, hint }: { icon: ReactNode; label: string; value: string; trend: string; color: string; hint: string }) {
