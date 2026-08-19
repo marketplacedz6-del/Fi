@@ -218,7 +218,7 @@ const copy = {
     selected: 'مختار لكِ', productsTitle: 'قطع تُكمل حكاية بيتك', productsText: 'كل منتج اختير لجودته، بساطته، وقدرته على صنع فرق حقيقي.',
     all: 'الكل', decor: 'ديكور', lighting: 'إضاءة', textiles: 'مفروشات', fragrance: 'عطور منزلية', tableware: 'أناقة المائدة', kitchen: 'المطبخ', organization: 'تنظيم المنزل', gifts: 'هدايا',
     newest: 'الأحدث', priceLow: 'السعر: من الأقل', priceHigh: 'السعر: من الأعلى',
-    quickView: 'نظرة سريعة', add: 'أضيفي للسلة', added: 'أُضيف إلى سلتك', noResults: 'لا توجد منتجات تطابق بحثك.',
+    quickView: 'نظرة سريعة', add: 'أضيفي للسلة', added: 'أُضيف إلى سلتك', noResults: 'لا توجد منتجات تطابق بحثك.', outOfStock: 'نفدت الكمية حالياً', stockLimit: 'تم الوصول إلى الكمية المتوفرة.', wishlistEmpty: 'لا توجد منتجات في المفضلة بعد.',
     storyEyebrow: 'من بيتنا إلى بيتك', storyTitle: 'نؤمن أن الأناقة إحساس قبل أن تكون مظهراً',
     storyText: 'بدأت Elegance Home & Style من شغفنا بالتفاصيل الهادئة. نختار كل قطعة كما لو كانت لبيتنا: خامة جميلة، حضور دافئ، وجودة تعيش معك طويلاً.',
     storyPoint1: 'تصاميم منتقاة وليست مكررة', storyPoint2: 'تغليف راقٍ يحمي كل تفصيلة', storyPoint3: 'خدمة قريبة منك قبل وبعد الطلب', readStory: 'اعرفي المزيد عنا',
@@ -257,7 +257,7 @@ const copy = {
     tableCollection: 'Art de la table', tableCollectionSub: 'Recevoir avec élégance', calmCollection: 'Parfum & calme', calmCollectionSub: 'Vos instants précieux', livingCollection: 'Salon chaleureux', livingCollectionSub: 'Le confort raffiné', explore: 'Explorer',
     selected: 'Pour vous', productsTitle: 'Des pièces qui racontent votre intérieur', productsText: 'Chaque produit est choisi pour sa qualité, sa simplicité et sa présence.',
     all: 'Tout', decor: 'Décoration', lighting: 'Éclairage', textiles: 'Textile', fragrance: 'Parfums', tableware: 'Art de table', kitchen: 'Cuisine', organization: 'Rangement', gifts: 'Cadeaux', newest: 'Nouveautés',  priceLow: 'Prix croissant', priceHigh: 'Prix décroissant',
-    quickView: 'Aperçu', add: 'Ajouter au panier', added: 'Ajouté à votre panier', noResults: 'Aucun produit ne correspond à votre recherche.',
+    quickView: 'Aperçu', add: 'Ajouter au panier', added: 'Ajouté à votre panier', noResults: 'Aucun produit ne correspond à votre recherche.', outOfStock: 'Rupture de stock', stockLimit: 'Quantité disponible maximale atteinte.', wishlistEmpty: 'Votre liste de favoris est encore vide.',
     storyEyebrow: 'De notre maison à la vôtre', storyTitle: 'L’élégance est une sensation avant d’être un style',
     storyText: 'Elegance Home & Style est née de notre passion pour les détails apaisants. Chaque pièce est choisie comme si elle était destinée à notre propre maison.',
     storyPoint1: 'Des créations choisies et singulières', storyPoint2: 'Un emballage raffiné et protecteur', storyPoint3: 'Un service proche avant et après la commande', readStory: 'En savoir plus',
@@ -303,6 +303,7 @@ function App() {
   const [category, setCategory] = useState<Category>('all')
   const [sort, setSort] = useState('newest')
   const [search, setSearch] = useState('')
+  const [wishlistOnly, setWishlistOnly] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -336,6 +337,16 @@ function App() {
   useEffect(() => writeStorage('ehs-products', catalogProducts), [catalogProducts])
   useEffect(() => writeStorage('ehs-cart', cart), [cart])
   useEffect(() => writeStorage('ehs-wishlist', wishlist), [wishlist])
+
+  // Keep locally saved carts valid when a product is deleted, unpublished, or its stock changes.
+  useEffect(() => {
+    setCart(current => current.flatMap(item => {
+      const product = catalogProducts.find(candidate => candidate.id === item.id)
+      if (!product || product.active === false || (product.stock ?? Infinity) <= 0) return []
+      return [{ ...item, quantity: Math.min(item.quantity, product.stock ?? item.quantity) }]
+    }))
+    setWishlist(current => current.filter(id => catalogProducts.some(product => product.id === id && product.active !== false)))
+  }, [catalogProducts])
 
   useEffect(() => {
     try {
@@ -377,7 +388,10 @@ function App() {
   }, [])
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
-  const cartProducts = cart.map(item => ({ ...catalogProducts.find(p => p.id === item.id)!, quantity: item.quantity })).filter(Boolean)
+  const cartProducts = cart.flatMap(item => {
+    const product = catalogProducts.find(candidate => candidate.id === item.id)
+    return product ? [{ ...product, quantity: item.quantity }] : []
+  })
   const subtotal = cartProducts.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const storedOrders = readStorage<StoreOrder[]>('ehs-orders', [])
 
@@ -386,37 +400,51 @@ function App() {
     const filtered = catalogProducts.filter(product => {
       const matchesCategory = category === 'all' || product.category === category
       if (product.active === false) return false
+      const matchesWishlist = !wishlistOnly || wishlist.includes(product.id)
       const text = `${product.name.ar} ${product.name.fr} ${product.description.ar} ${product.description.fr}`.toLowerCase()
-      return matchesCategory && (!query || text.includes(query))
+      return matchesCategory && matchesWishlist && (!query || text.includes(query))
     })
     if (sort === 'low') return [...filtered].sort((a, b) => a.price - b.price)
     if (sort === 'high') return [...filtered].sort((a, b) => b.price - a.price)
     return filtered
-  }, [catalogProducts, category, search, sort])
+  }, [catalogProducts, category, search, sort, wishlistOnly, wishlist])
 
   const money = (value: number) => `${new Intl.NumberFormat(isAr ? 'ar-DZ' : 'fr-DZ').format(value)} ${isAr ? 'د.ج' : 'DA'}`
 
   const addToCart = (id: number, quantity = 1) => {
+    const product = catalogProducts.find(item => item.id === id)
+    const available = product?.stock ?? Infinity
+    const alreadyInCart = cart.find(item => item.id === id)?.quantity ?? 0
+    if (!product || available <= 0) {
+      setToast(t.outOfStock)
+      return
+    }
+    const acceptedQuantity = Math.min(quantity, Math.max(0, available - alreadyInCart))
+    if (acceptedQuantity <= 0) {
+      setToast(t.stockLimit)
+      return
+    }
     setCart(current => {
       const exists = current.find(item => item.id === id)
       return exists
-        ? current.map(item => item.id === id ? { ...item, quantity: item.quantity + quantity } : item)
-        : [...current, { id, quantity }]
+        ? current.map(item => item.id === id ? { ...item, quantity: item.quantity + acceptedQuantity } : item)
+        : [...current, { id, quantity: acceptedQuantity }]
     })
-    const product = catalogProducts.find(item => item.id === id)
     trackCommerceEvent('AddToCart', {
-      content_ids: [id],
-      content_name: product?.name[lang],
-      value: product ? product.price * quantity : undefined,
-      currency: 'DZD',
-      quantity,
+      content_ids: [id], content_name: product.name[lang], value: product.price * acceptedQuantity, currency: 'DZD', quantity: acceptedQuantity,
     })
-    setToast(t.added)
+    setToast(acceptedQuantity < quantity ? t.stockLimit : t.added)
   }
 
   const updateQuantity = (id: number, quantity: number) => {
-    if (quantity <= 0) setCart(current => current.filter(item => item.id !== id))
-    else setCart(current => current.map(item => item.id === id ? { ...item, quantity } : item))
+    if (quantity <= 0) {
+      setCart(current => current.filter(item => item.id !== id))
+      return
+    }
+    const product = catalogProducts.find(item => item.id === id)
+    const allowedQuantity = Math.min(quantity, product?.stock ?? quantity)
+    setCart(current => current.map(item => item.id === id ? { ...item, quantity: allowedQuantity } : item))
+    if (allowedQuantity < quantity) setToast(t.stockLimit)
   }
 
   const toggleWishlist = (id: number) => {
@@ -572,6 +600,11 @@ function App() {
       currency: 'DZD',
       order_id: nextId,
     })
+    // Reserve the sold quantities locally so the storefront cannot oversell stock.
+    setCatalogProducts(current => current.map(product => {
+      const ordered = cart.find(item => item.id === product.id)?.quantity ?? 0
+      return ordered && product.stock !== undefined ? { ...product, stock: Math.max(0, product.stock - ordered) } : product
+    }))
     setCart([])
     setCheckoutOpen(false)
     setCartOpen(false)
@@ -634,8 +667,8 @@ function App() {
             <button className={`icon-button desktop-only account-trigger ${isAuthenticated ? 'signed-in' : ''}`} aria-label={t.account} onClick={openAccount}>
               {isAuthenticated ? <LayoutDashboard size={21} /> : <UserRound size={21} />}
             </button>
-            <button className="icon-button desktop-only badge-button" aria-label={t.wishlist} onClick={() => goToProducts()}>
-              <Heart size={21} />{wishlist.length > 0 && <span>{wishlist.length}</span>}
+            <button className={`icon-button desktop-only badge-button ${wishlistOnly ? 'active' : ''}`} aria-label={t.wishlist} aria-pressed={wishlistOnly} onClick={() => { setWishlistOnly(value => !value); goToProducts() }}>
+              <Heart size={21} fill={wishlistOnly ? 'currentColor' : 'none'} />{wishlist.length > 0 && <span>{wishlist.length}</span>}
             </button>
             <button className="cart-button badge-button" onClick={() => setCartOpen(true)} aria-label={t.cart}>
               <ShoppingBag size={21} />
@@ -723,11 +756,11 @@ function App() {
                   <ProductCard key={product.id} product={product} lang={lang} money={money}
                     wished={wishlist.includes(product.id)} onWish={() => toggleWishlist(product.id)}
                     onQuick={() => openQuickView(product)} onAdd={() => addToCart(product.id)}
-                    quickLabel={t.quickView} addLabel={t.add} categoryLabel={categoryLabels[product.category]} />
+                    quickLabel={t.quickView} addLabel={t.add} outOfStockLabel={t.outOfStock} categoryLabel={categoryLabels[product.category]} />
                 ))}
               </div>
             ) : (
-              <div className="no-results"><Search size={34} /><p>{t.noResults}</p></div>
+              <div className="no-results"><Search size={34} /><p>{wishlistOnly && wishlist.length === 0 ? t.wishlistEmpty : t.noResults}</p>{wishlistOnly && <button className="outline-button" onClick={() => setWishlistOnly(false)}>{isAr ? 'عرض كل المنتجات' : 'Voir tous les produits'}</button>}</div>
             )}
           </div>
         </section>
@@ -892,10 +925,10 @@ function App() {
               <div className="rating"><span><Star fill="currentColor" /> {quickProduct.rating}</span><small>({quickProduct.reviews})</small></div>
               <div className="quick-price"><b>{money(quickProduct.price)}</b>{quickProduct.oldPrice && <del>{money(quickProduct.oldPrice)}</del>}</div>
               <p className="quick-description">{quickProduct.description[lang]}</p>
-              <div className="stock"><CircleCheck /> {t.available}</div>
+              <div className={`stock ${(quickProduct.stock ?? Infinity) <= 0 ? 'unavailable' : ''}`}><CircleCheck /> {(quickProduct.stock ?? Infinity) <= 0 ? t.outOfStock : t.available}</div>
               <div className="quick-actions">
-                <div className="quantity-control large"><button onClick={() => setQuickQuantity(q => Math.max(1, q - 1))}><Minus /></button><span>{quickQuantity}</span><button onClick={() => setQuickQuantity(q => q + 1)}><Plus /></button></div>
-                <button className="primary-button" onClick={() => { addToCart(quickProduct.id, quickQuantity); setQuickProduct(null); setCartOpen(true) }}><ShoppingBag /> {t.add}</button>
+                <div className="quantity-control large"><button onClick={() => setQuickQuantity(q => Math.max(1, q - 1))} disabled={(quickProduct.stock ?? Infinity) <= 0}><Minus /></button><span>{quickQuantity}</span><button onClick={() => setQuickQuantity(q => Math.min(quickProduct.stock ?? q + 1, q + 1))} disabled={(quickProduct.stock ?? Infinity) <= 0}><Plus /></button></div>
+                <button className="primary-button" disabled={(quickProduct.stock ?? Infinity) <= 0} onClick={() => { addToCart(quickProduct.id, quickQuantity); setQuickProduct(null); setCartOpen(true) }}><ShoppingBag /> {(quickProduct.stock ?? Infinity) <= 0 ? t.outOfStock : t.add}</button>
               </div>
               <div className="quick-meta"><span><Truck /> {t.deliverySub}</span><span><BadgeCheck /> {t.brandNote}</span></div>
             </div>
@@ -1013,15 +1046,16 @@ function CollectionCard({ image, title, subtitle, button, onClick, featured = fa
   )
 }
 
-function ProductCard({ product, lang, money, wished, onWish, onQuick, onAdd, quickLabel, addLabel, categoryLabel }: {
-  product: Product; lang: Lang; money: (value: number) => string; wished: boolean; onWish: () => void; onQuick: () => void; onAdd: () => void; quickLabel: string; addLabel: string; categoryLabel: string
+function ProductCard({ product, lang, money, wished, onWish, onQuick, onAdd, quickLabel, addLabel, outOfStockLabel, categoryLabel }: {
+  product: Product; lang: Lang; money: (value: number) => string; wished: boolean; onWish: () => void; onQuick: () => void; onAdd: () => void; quickLabel: string; addLabel: string; outOfStockLabel: string; categoryLabel: string
 }) {
+  const unavailable = (product.stock ?? Infinity) <= 0
   return (
-    <article className="product-card">
+    <article className={`product-card ${unavailable ? 'out-of-stock' : ''}`}>
       <div className="product-image-wrap">
         <StoredImage className="product-primary-image" src={product.image} alt={product.name[lang]} loading="lazy" />
         {(product.images?.length ?? 0) > 1 && <StoredImage className="product-secondary-image" src={product.images![1]} alt="" loading="lazy" />}
-        {product.badge && <span className="product-badge">{product.badge[lang]}</span>}
+        {unavailable ? <span className="product-badge stock-out-badge">{outOfStockLabel}</span> : product.badge && <span className="product-badge">{product.badge[lang]}</span>}
         <button className={`wish-button ${wished ? 'active' : ''}`} onClick={onWish} aria-label="wishlist"><Heart fill={wished ? 'currentColor' : 'none'} /></button>
         <button className="quick-button" onClick={onQuick}><Search /> {quickLabel}</button>
       </div>
@@ -1030,7 +1064,7 @@ function ProductCard({ product, lang, money, wished, onWish, onQuick, onAdd, qui
         <h3 onClick={onQuick}>{product.name[lang]}</h3>
         <div className="product-buy">
           <p><b>{money(product.price)}</b>{product.oldPrice && <del>{money(product.oldPrice)}</del>}</p>
-          <button onClick={onAdd} aria-label={addLabel}><ShoppingBag /><span>{addLabel}</span></button>
+          <button onClick={onAdd} aria-label={unavailable ? outOfStockLabel : addLabel} disabled={unavailable}><ShoppingBag /><span>{unavailable ? outOfStockLabel : addLabel}</span></button>
         </div>
       </div>
     </article>

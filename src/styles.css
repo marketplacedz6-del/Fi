@@ -176,6 +176,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .product-buy button span { white-space: nowrap; font-size: 9px; opacity: 0; transition: opacity .2s; }
 .product-buy button:hover { max-width: 150px; background: var(--navy); color: white; }
 .product-buy button:hover span { opacity: 1; }
+.product-buy button:disabled, .quick-actions .primary-button:disabled { cursor: not-allowed; opacity: .5; background: #8c8b88; border-color: #8c8b88; transform: none; }
+.product-buy button:disabled:hover { max-width: 40px; background: #8c8b88; color: var(--navy); }
+.stock.unavailable { color: #a34d4d; }
+.stock-out-badge { color: #a34d4d; }
+.out-of-stock .product-primary-image { filter: grayscale(.3); opacity: .7; }
 .no-results { min-height: 300px; display: grid; place-content: center; text-align: center; color: #8d887f; gap: 10px; }
 .no-results svg { margin: auto; color: var(--gold); }
 .no-results p { font-size: 12px; }
