@@ -101,6 +101,7 @@ type AdminDashboardProps = {
   products: DashboardProduct[]
   orders: StoreOrder[]
   cartCount: number
+  cartValue: number
   money: (value: number) => string
   onClose: () => void
   onLogout: () => void
@@ -120,6 +121,7 @@ type LandingPage = { id: number; title: string; slug: string; published: boolean
 type Pixel = { id: number; provider: PixelProvider; pixelId: string; active: boolean }
 type TeamMember = { id: number; name: string; email: string; role: string; active: boolean }
 type Sheet = { id: number; name: string; url: string; active: boolean }
+type ManualCustomer = { id: number; name: string; phone: string; email: string }
 
 const readLocal = <T,>(key: string, fallback: T): T => {
   try {
@@ -166,7 +168,7 @@ const providerClass: Record<PixelProvider, string> = {
 }
 
 export default function AdminDashboard({
-  lang, logo, products, orders, cartCount, money, onClose, onLogout, onOpenStore, onAddProduct, onUpdateProduct, onDuplicateProduct, onDeleteProducts, onSetProductsStatus, onRestoreProducts,
+  lang, logo, products, orders, cartCount, cartValue, money, onClose, onLogout, onOpenStore, onAddProduct, onUpdateProduct, onDuplicateProduct, onDeleteProducts, onSetProductsStatus, onRestoreProducts,
 }: AdminDashboardProps) {
   const ar = lang === 'ar'
   const l = (arabic: string, french: string) => ar ? arabic : french
@@ -177,6 +179,7 @@ export default function AdminDashboard({
   const [tab, setTab] = useState<Tab>('overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [globalSearch, setGlobalSearch] = useState('')
   const [productSearch, setProductSearch] = useState('')
   const [productCategory, setProductCategory] = useState('all')
   const [productStatus, setProductStatus] = useState('all')
@@ -190,12 +193,16 @@ export default function AdminDashboard({
   const [pages, setPages] = useState<LandingPage[]>(() => readLocal('ehs-landing-pages', initialPages))
   const [pixels, setPixels] = useState<Pixel[]>(() => readLocal('ehs-dashboard-pixels', []))
   const [team, setTeam] = useState<TeamMember[]>(() => readLocal('ehs-team', initialTeam))
+  const [manualCustomers, setManualCustomers] = useState<ManualCustomer[]>(() => readLocal('ehs-manual-customers', []))
+  const [crmAddOpen, setCrmAddOpen] = useState(false)
   const [sheets, setSheets] = useState<Sheet[]>(() => readLocal('ehs-sheets', []))
   const [delivery, setDelivery] = useState<Record<string, boolean>>(() => readLocal('ehs-delivery', { Yalidine: true, 'ZR Express': false, Maystro: false, Guepex: false }))
+  const [automation, setAutomation] = useState(() => readLocal('ehs-automation', { whatsapp: true, retargeting: true }))
   const [domain, setDomain] = useState(() => readLocalText('ehs-domain'))
   const [apiKey, setApiKey] = useState(() => readLocalText('ehs-api-key', createApiKey()))
   const [showApi, setShowApi] = useState(false)
   const [newPage, setNewPage] = useState('')
+  const [previewPage, setPreviewPage] = useState<LandingPage | null>(null)
   const [pixelProvider, setPixelProvider] = useState<PixelProvider>('Meta')
   const [pixelId, setPixelId] = useState('')
   const [sheetName, setSheetName] = useState('')
@@ -206,8 +213,10 @@ export default function AdminDashboard({
   useEffect(() => writeLocal('ehs-landing-pages', JSON.stringify(pages)), [pages])
   useEffect(() => writeLocal('ehs-dashboard-pixels', JSON.stringify(pixels)), [pixels])
   useEffect(() => writeLocal('ehs-team', JSON.stringify(team)), [team])
+  useEffect(() => writeLocal('ehs-manual-customers', JSON.stringify(manualCustomers)), [manualCustomers])
   useEffect(() => writeLocal('ehs-sheets', JSON.stringify(sheets)), [sheets])
   useEffect(() => writeLocal('ehs-delivery', JSON.stringify(delivery)), [delivery])
+  useEffect(() => writeLocal('ehs-automation', JSON.stringify(automation)), [automation])
   useEffect(() => writeLocal('ehs-api-key', apiKey), [apiKey])
 
   useEffect(() => {
@@ -250,6 +259,15 @@ export default function AdminDashboard({
   const landingViews = pages.reduce((sum, page) => sum + page.views, 0)
   const conversionRate = landingViews ? orders.length / landingViews * 100 : 0
   const todayLabel = new Intl.DateTimeFormat(ar ? 'ar-DZ' : 'fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).format(now)
+  const globalResults = useMemo(() => {
+    const query = globalSearch.trim().toLowerCase()
+    if (!query) return []
+    const productResults = products.filter(product => `${product.name.ar} ${product.name.fr} ${productSku(product)}`.toLowerCase().includes(query)).map(product => ({ type: 'product' as const, id: String(product.id), label: product.name[lang], detail: productSku(product), tab: 'products' as Tab }))
+    const orderResults = orders.filter(order => `${order.id} ${String(order.customer.name ?? '')}`.toLowerCase().includes(query)).map(order => ({ type: 'order' as const, id: order.id, label: String(order.customer.name ?? order.id), detail: order.id, tab: 'orders' as Tab }))
+    const pageResults = pages.filter(page => page.title.toLowerCase().includes(query)).map(page => ({ type: 'page' as const, id: String(page.id), label: page.title, detail: `/pages/${page.slug}`, tab: 'pages' as Tab }))
+    return [...productResults, ...orderResults, ...pageResults].slice(0, 8)
+  }, [globalSearch, products, orders, pages, lang])
+
   const productSales = useMemo(() => {
     const sold = new Map<number, number>()
     orders.forEach(order => order.items?.forEach(item => sold.set(item.id, (sold.get(item.id) ?? 0) + (Number(item.quantity) || 0))))
@@ -272,8 +290,11 @@ export default function AdminDashboard({
         spent: (previous?.spent ?? 0) + (Number(order.total) || 0),
       })
     })
+    manualCustomers.forEach(customer => {
+      if (!unique.has(customer.phone)) unique.set(customer.phone, { name: customer.name, phone: customer.phone, orders: 0, spent: 0 })
+    })
     return Array.from(unique.values())
-  }, [orders, lang]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [orders, manualCustomers, lang]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredProducts = useMemo(() => {
     const query = productSearch.trim().toLowerCase()
@@ -552,7 +573,7 @@ export default function AdminDashboard({
       <PageTitle icon={<PackageCheck />} title={l('إدارة الطلبات', 'Gestion des commandes')} text={l('طلبات غير محدودة ومتابعة كاملة من التأكيد حتى التسليم.', 'Commandes illimitées, du suivi à la livraison.')} />
       <div className="metric-strip"><Metric label={l('كل الطلبات', 'Toutes')} value={orders.length} /><Metric label={l('جديدة', 'Nouvelles')} value={orders.length} warning /><Metric label={l('قيد التوصيل', 'En livraison')} value={0} /><Metric label={l('الإيرادات', 'Revenus')} value={money(revenue)} green /></div>
       <div className="dashboard-card data-card">
-        <div className="table-tools"><label><Search /><input value={orderSearch} onChange={e => setOrderSearch(e.target.value)} placeholder={l('رقم الطلب، الزبون أو الهاتف...', 'Commande, client ou téléphone...')} /></label><button className="smart-secondary"><RefreshCw /> {l('تحديث', 'Actualiser')}</button></div>
+        <div className="table-tools"><label><Search /><input value={orderSearch} onChange={e => setOrderSearch(e.target.value)} placeholder={l('رقم الطلب، الزبون أو الهاتف...', 'Commande, client ou téléphone...')} /></label><button className="smart-secondary" onClick={() => notify(l('الطلبات محدثة الآن', 'Commandes actualisées'))}><RefreshCw /> {l('تحديث', 'Actualiser')}</button></div>
         <OrderTable orders={filteredOrders.slice().reverse()} ar={ar} money={money} emptyText={l('لا توجد طلبات مطابقة.', 'Aucune commande correspondante.')} expanded />
       </div>
     </section>
@@ -560,10 +581,10 @@ export default function AdminDashboard({
 
   const renderCrm = () => (
     <section className="dashboard-page">
-      <PageTitle icon={<UsersRound />} title={l('CRM العملاء الذكي', 'CRM clients intelligent')} text={l('ملف موحد لكل عميل مع سجل الطلبات وقيمة العميل.', 'Une fiche unifiée par client avec historique et valeur.')} action={<button className="smart-primary"><Plus /> {l('عميل جديد', 'Nouveau client')}</button>} />
+      <PageTitle icon={<UsersRound />} title={l('CRM العملاء الذكي', 'CRM clients intelligent')} text={l('ملف موحد لكل عميل مع سجل الطلبات وقيمة العميل.', 'Une fiche unifiée par client avec historique et valeur.')} action={<button className="smart-primary" onClick={() => setCrmAddOpen(true)}><Plus /> {l('عميل جديد', 'Nouveau client')}</button>} />
       <div className="metric-strip"><Metric label={l('إجمالي العملاء', 'Total clients')} value={customers.length} /><Metric label={l('عملاء متكررون', 'Fidèles')} value={customers.filter(c => c.orders > 1).length} green /><Metric label={l('متوسط القيمة', 'Panier moyen')} value={money(customers.length ? revenue / customers.length : 0)} /><Metric label={l('شرائح ذكية', 'Segments')} value={4} /></div>
       <div className="crm-layout">
-        <div className="dashboard-card crm-list"><CardHead title={l('قاعدة العملاء', 'Base clients')} subtitle={l('تتحدث تلقائياً', 'Mise à jour automatique')} />{customers.length ? customers.map((customer, index) => <div className="customer-row" key={customer.phone}><div className={`customer-avatar c${index % 4}`}>{customer.name.charAt(0)}</div><p><b>{customer.name}</b><span dir="ltr">{customer.phone}</span></p><small>{customer.orders} {l('طلبات', 'cmd.')}</small><strong>{money(customer.spent)}</strong><button><MoreHorizontal /></button></div>) : <DashboardEmpty icon={<UsersRound />} text={l('سيتم إنشاء ملفات العملاء تلقائياً مع أول طلب.', 'Les profils clients seront créés avec la première commande.')} />}</div>
+        <div className="dashboard-card crm-list"><CardHead title={l('قاعدة العملاء', 'Base clients')} subtitle={l('تتحدث تلقائياً', 'Mise à jour automatique')} />{customers.length ? customers.map((customer, index) => <div className="customer-row" key={customer.phone}><div className={`customer-avatar c${index % 4}`}>{customer.name.charAt(0)}</div><p><b>{customer.name}</b><span dir="ltr">{customer.phone}</span></p><small>{customer.orders} {l('طلبات', 'cmd.')}</small><strong>{money(customer.spent)}</strong><button onClick={() => notify(`${customer.name} · ${customer.phone} · ${money(customer.spent)}`)}><MoreHorizontal /></button></div>) : <DashboardEmpty icon={<UsersRound />} text={l('سيتم إنشاء ملفات العملاء تلقائياً مع أول طلب.', 'Les profils clients seront créés avec la première commande.')} />}</div>
         <div className="dashboard-card crm-segments"><CardHead title={l('شرائح ذكية', 'Segments intelligents')} subtitle="CRM" /><Segment color="gold" title={l('عملاء VIP', 'Clients VIP')} value={customers.filter(c => c.spent >= 15000).length} /><Segment color="green" title={l('عملاء متكررون', 'Clients fidèles')} value={customers.filter(c => c.orders > 1).length} /><Segment color="blue" title={l('عملاء جدد', 'Nouveaux clients')} value={customers.length} /><Segment color="rose" title={l('بحاجة لإعادة تفاعل', 'À réactiver')} value={0} /></div>
       </div>
     </section>
@@ -574,7 +595,7 @@ export default function AdminDashboard({
       <PageTitle icon={<PanelTop />} title={l('صفحات الهبوط', 'Landing pages')} text={l('أنشئ صفحات حملات غير محدودة بدون كود.', 'Créez des pages de campagne illimitées, sans code.')} />
       <form className="inline-creator" onSubmit={addLandingPage}><div><WandSparkles /><input value={newPage} onChange={e => setNewPage(e.target.value)} placeholder={l('اسم الصفحة الجديدة...', 'Nom de la nouvelle page...')} /></div><button className="smart-primary"><Plus /> {l('إنشاء الصفحة', 'Créer la page')}</button></form>
       <div className="landing-grid">
-        {pages.map(page => <article className="landing-card dashboard-card" key={page.id}><div className="landing-preview"><div className="preview-browser"><i /><i /><i /></div><PanelTop /><span>{page.title}</span></div><div className="landing-info"><div><em className={page.published ? 'published' : 'draft'}>{page.published ? l('منشورة', 'Publiée') : l('مسودة', 'Brouillon')}</em><h3>{page.title}</h3><p dir="ltr">/pages/{page.slug}</p></div><button><MoreHorizontal /></button></div><div className="landing-stats"><span><Eye /> {page.views}</span><button onClick={() => setPages(current => current.map(item => item.id === page.id ? { ...item, published: !item.published } : item))}>{page.published ? l('إيقاف', 'Dépublier') : l('نشر', 'Publier')}</button><button onClick={() => setPages(current => current.filter(item => item.id !== page.id))}><Trash2 /></button></div></article>)}
+        {pages.map(page => <article className="landing-card dashboard-card" key={page.id}><div className="landing-preview"><div className="preview-browser"><i /><i /><i /></div><PanelTop /><span>{page.title}</span></div><div className="landing-info"><div><em className={page.published ? 'published' : 'draft'}>{page.published ? l('منشورة', 'Publiée') : l('مسودة', 'Brouillon')}</em><h3>{page.title}</h3><p dir="ltr">/pages/{page.slug}</p></div><button onClick={() => setPreviewPage(page)} title={l('معاينة', 'Aperçu')}><Eye /></button></div><div className="landing-stats"><span><Eye /> {page.views}</span><button onClick={() => setPages(current => current.map(item => item.id === page.id ? { ...item, published: !item.published } : item))}>{page.published ? l('إيقاف', 'Dépublier') : l('نشر', 'Publier')}</button><button onClick={() => setPages(current => current.filter(item => item.id !== page.id))}><Trash2 /></button></div></article>)}
         <button className="new-landing-card" onClick={() => document.querySelector<HTMLInputElement>('.inline-creator input')?.focus()}><Plus /><b>{l('صفحة جديدة', 'Nouvelle page')}</b><span>{l('غير محدود', 'Illimité')}</span></button>
       </div>
     </section>
@@ -586,7 +607,7 @@ export default function AdminDashboard({
       <div className="provider-grid">{(['Meta', 'TikTok', 'Google', 'Pinterest', 'Snapchat'] as PixelProvider[]).map(provider => <div className={`provider-card ${providerClass[provider]}`} key={provider}><div>{provider.charAt(0)}</div><p><b>{provider}</b><span>{pixels.filter(pixel => pixel.provider === provider).length} Pixels</span></p><CircleCheck /></div>)}</div>
       <div className="marketing-layout">
         <div className="dashboard-card pixel-manager"><CardHead title={l('مدير البيكسلات', 'Gestionnaire de pixels')} subtitle={l('غير محدود', 'Illimité')} /><form onSubmit={addPixel}><select value={pixelProvider} onChange={e => setPixelProvider(e.target.value as PixelProvider)}>{(['Meta', 'TikTok', 'Google', 'Pinterest', 'Snapchat'] as PixelProvider[]).map(provider => <option key={provider}>{provider}</option>)}</select><input value={pixelId} onChange={e => setPixelId(e.target.value)} placeholder="Pixel ID" dir="ltr" /><button className="smart-primary"><Plus /> {l('إضافة', 'Ajouter')}</button></form><div className="pixel-list">{pixels.length ? pixels.map(pixel => <div key={pixel.id}><span className={providerClass[pixel.provider]}>{pixel.provider.charAt(0)}</span><p><b>{pixel.provider}</b><small dir="ltr">{pixel.pixelId}</small></p><button className={`smart-toggle ${pixel.active ? 'on' : ''}`} onClick={() => setPixels(current => current.map(item => item.id === pixel.id ? { ...item, active: !item.active } : item))}><i /></button><button onClick={() => setPixels(current => current.filter(item => item.id !== pixel.id))}><Trash2 /></button></div>) : <DashboardEmpty icon={<Target />} text={l('أضف أول بيكسل لبدء التتبع.', 'Ajoutez votre premier pixel.')} />}</div></div>
-        <div className="dashboard-card recovery-card"><CardHead title={l('استرداد السلات المتروكة', 'Paniers abandonnés')} subtitle={l('أتمتة ذكية', 'Automatisation')} action={<Zap />} /><div className="recovery-visual"><div className="recovery-ring"><b>0</b><span>{l('سلة', 'panier')}</span></div><p>{l('قيمة قابلة للاسترداد', 'Valeur récupérable')}<strong>{money(0)}</strong></p></div><div className="automation-row"><div><MessageIcon /><p><b>WhatsApp</b><span>{l('بعد 30 دقيقة', 'Après 30 min')}</span></p></div><button className="smart-toggle on"><i /></button></div><div className="automation-row"><div><Megaphone /><p><b>{l('إعلان إعادة الاستهداف', 'Retargeting')}</b><span>Meta + TikTok</span></p></div><button className="smart-toggle on"><i /></button></div></div>
+        <div className="dashboard-card recovery-card"><CardHead title={l('استرداد السلات المتروكة', 'Paniers abandonnés')} subtitle={l('أتمتة ذكية', 'Automatisation')} action={<Zap />} /><div className="recovery-visual"><div className="recovery-ring"><b>{cartCount}</b><span>{l('عنصر', 'article(s)')}</span></div><p>{l('قيمة قابلة للاسترداد', 'Valeur récupérable')}<strong>{money(cartValue)}</strong></p></div><div className="automation-row"><div><MessageIcon /><p><b>WhatsApp</b><span>{l('بعد 30 دقيقة', 'Après 30 min')}</span></p></div><button className={`smart-toggle ${automation.whatsapp ? 'on' : ''}`} onClick={() => setAutomation(current => ({ ...current, whatsapp: !current.whatsapp }))}><i /></button></div><div className="automation-row"><div><Megaphone /><p><b>{l('إعلان إعادة الاستهداف', 'Retargeting')}</b><span>Meta + TikTok</span></p></div><button className={`smart-toggle ${automation.retargeting ? 'on' : ''}`} onClick={() => setAutomation(current => ({ ...current, retargeting: !current.retargeting }))}><i /></button></div></div>
       </div>
     </section>
   )
@@ -641,7 +662,7 @@ export default function AdminDashboard({
       <aside className={`smart-sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="smart-logo"><img src={logo} alt="Elegance Home & Style" /><div><b>Elegance</b><span>CONTROL CENTER</span></div></div>
         <button className="sidebar-mobile-close" onClick={() => setSidebarOpen(false)}><X /></button>
-        <div className="plan-badge"><Crown /><div><b>Elite Plan</b><span>{l('كل المميزات مفعلة', 'Toutes les fonctions actives')}</span></div><CircleCheck /></div>
+        <div className="plan-badge"><Crown /><div><b>Elite · Local Mode</b><span>{l('البيانات محفوظة على هذا الجهاز', 'Données enregistrées sur cet appareil')}</span></div><CircleCheck /></div>
         <nav>{navGroups.map(group => <div className="nav-group" key={group.label}><p>{group.label}</p>{group.items.map(item => <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => switchTab(item.id)}>{item.icon}<span>{item.label}</span>{item.badge !== undefined && <em>{item.badge}</em>}</button>)}</div>)}</nav>
         <button className="smart-support" onClick={() => window.open('https://wa.me/213555000000', '_blank')}><Headphones /><div><b>{l('دعم مباشر', 'Support direct')}</b><span>24/7 · Online</span></div><i /></button>
         <button className="smart-logout" onClick={onLogout}><LogOut /> {l('تسجيل الخروج', 'Déconnexion')}</button>
@@ -650,7 +671,7 @@ export default function AdminDashboard({
 
       <main className="smart-main">
         <header className="smart-topbar">
-          <div className="topbar-start"><button className="dashboard-menu" onClick={() => setSidebarOpen(true)}><Menu /></button><div className="global-search"><Search /><input placeholder={l('ابحث في متجرك...', 'Rechercher dans la boutique...')} /><kbd>⌘ K</kbd></div></div>
+          <div className="topbar-start"><button className="dashboard-menu" onClick={() => setSidebarOpen(true)}><Menu /></button><div className="global-search"><Search /><input value={globalSearch} onChange={event => setGlobalSearch(event.target.value)} placeholder={l('ابحث في المنتجات والطلبات والصفحات...', 'Rechercher produits, commandes et pages...')} />{globalSearch ? <button onClick={() => setGlobalSearch('')}><X /></button> : <kbd>⌘ K</kbd>}{globalSearch && <div className="global-search-results">{globalResults.length ? globalResults.map(result => <button key={`${result.type}-${result.id}`} onClick={() => { setTab(result.tab); if (result.type === 'product') setProductSearch(result.label); if (result.type === 'order') setOrderSearch(result.detail); setGlobalSearch('') }}><div>{result.type === 'product' ? <ShoppingBag /> : result.type === 'order' ? <PackageCheck /> : <PanelTop />}</div><p><b>{result.label}</b><span dir="ltr">{result.detail}</span></p><ChevronLeft /></button>) : <span>{l('لا توجد نتائج', 'Aucun résultat')}</span>}</div>}</div></div>
           <div className="topbar-actions">
             <button className="visit-store" onClick={onOpenStore}><Store /> {l('عرض المتجر', 'Voir la boutique')} <ExternalLink /></button>
             <div className="notification-wrap"><button className="notification-button" onClick={() => setNotificationsOpen(value => !value)}><Bell /><i>3</i></button>{notificationsOpen && <div className="notification-popover"><h3>{l('الإشعارات', 'Notifications')} <span>3</span></h3><Notification icon={<PackageCheck />} title={l('طلب جديد', 'Nouvelle commande')} text={l('تم تسجيل طلب جديد في المتجر.', 'Une commande a été enregistrée.')} /><Notification icon={<CircleAlert />} title={l('تنبيه ذكي', 'Alerte intelligente')} text={l('اربط شركة توصيل ثانية لتحسين الأداء.', 'Connectez un second transporteur.')} /><Notification icon={<ShieldCheck />} title="SLA 99.9%" text={l('جميع الأنظمة تعمل بشكل طبيعي.', 'Tous les systèmes sont opérationnels.')} /></div>}</div>
@@ -662,6 +683,8 @@ export default function AdminDashboard({
       </main>
 
       {addProductOpen && <ProductEditorModal ar={ar} logo={logo} products={products} product={editingProduct} onClose={() => { setAddProductOpen(false); setEditingProduct(null) }} onSave={draft => { if (editingProduct) onUpdateProduct(editingProduct.id, draft); else onAddProduct(draft); setAddProductOpen(false); setEditingProduct(null); notify(editingProduct ? l('تم تحديث المنتج بنجاح', 'Produit mis à jour') : l('تمت إضافة المنتج بنجاح', 'Produit ajouté avec succès')) }} />}
+      {previewPage && <div className="dashboard-inner-overlay" onMouseDown={() => setPreviewPage(null)}><div className="landing-preview-modal" onMouseDown={event => event.stopPropagation()}><button onClick={() => setPreviewPage(null)}><X /></button><img src={logo} alt="" /><span>{previewPage.published ? l('صفحة منشورة', 'Page publiée') : l('معاينة المسودة', 'Aperçu du brouillon')}</span><h2>{previewPage.title}</h2><p>{l('صفحة هبوط أنيقة لعرض مجموعتك ومنتجاتك، مع زر طلب مباشر وتوصيل إلى 58 ولاية.', 'Une landing page élégante avec commande directe et livraison nationale.')}</p><div><Sparkles /><b>Elegance Home & Style</b><small dir="ltr">/pages/{previewPage.slug}</small></div><button className="smart-primary" onClick={() => { void navigator.clipboard?.writeText(`${location.origin}${location.pathname}#page-${previewPage.slug}`); notify(l('تم نسخ رابط الصفحة', 'Lien de la page copié')) }}><Copy /> {l('نسخ الرابط', 'Copier le lien')}</button></div></div>}
+      {crmAddOpen && <div className="dashboard-inner-overlay" onMouseDown={() => setCrmAddOpen(false)}><form className="simple-dashboard-modal" onMouseDown={event => event.stopPropagation()} onSubmit={event => { event.preventDefault(); const data = new FormData(event.currentTarget); setManualCustomers(current => [...current, { id: Date.now(), name: String(data.get('name')), phone: String(data.get('phone')), email: String(data.get('email')) }]); setCrmAddOpen(false); notify(l('تمت إضافة العميل إلى CRM', 'Client ajouté au CRM')) }}><div className="add-modal-head"><div><UsersRound /><p><b>{l('إضافة عميل جديد', 'Nouveau client')}</b><span>CRM</span></p></div><button type="button" onClick={() => setCrmAddOpen(false)}><X /></button></div><label><span>{l('الاسم الكامل', 'Nom complet')}</span><input name="name" required /></label><label><span>{l('رقم الهاتف', 'Téléphone')}</span><input name="phone" required dir="ltr" /></label><label><span>{l('البريد الإلكتروني', 'E-mail')}</span><input name="email" type="email" dir="ltr" /></label><button className="smart-primary" type="submit"><Plus /> {l('حفظ العميل', 'Enregistrer')}</button></form></div>}
       {notice && <div className="dashboard-toast"><CircleCheck /> {notice}</div>}
     </div>
   )
@@ -709,7 +732,7 @@ function Metric({ label, value, green = false, warning = false }: { label: strin
 
 function OrderTable({ orders, ar, money, emptyText, expanded = false }: { orders: StoreOrder[]; ar: boolean; money: (v: number) => string; emptyText: string; expanded?: boolean }) {
   if (!orders.length) return <DashboardEmpty icon={<PackageCheck />} text={emptyText} />
-  return <div className={`smart-order-list ${expanded ? 'expanded' : ''}`}>{orders.map((order, index) => <div className="smart-order-row" key={order.id}><div className={`order-customer-avatar c${index % 4}`}>{String(order.customer.name ?? 'C').charAt(0)}</div><p><b>{String(order.customer.name ?? (ar ? 'زبون' : 'Client'))}</b><span dir="ltr">{order.id}</span></p>{expanded && <small dir="ltr">{String(order.customer.phone ?? '—')}</small>}<strong>{money(order.total)}</strong><em>{ar ? 'طلب جديد' : 'Nouvelle'}</em><button><MoreHorizontal /></button></div>)}</div>
+  return <div className={`smart-order-list ${expanded ? 'expanded' : ''}`}>{orders.map((order, index) => <div className="smart-order-row" key={order.id}><div className={`order-customer-avatar c${index % 4}`}>{String(order.customer.name ?? 'C').charAt(0)}</div><p><b>{String(order.customer.name ?? (ar ? 'زبون' : 'Client'))}</b><span dir="ltr">{order.id}</span></p>{expanded && <small dir="ltr">{String(order.customer.phone ?? '—')}</small>}<strong>{money(order.total)}</strong><em>{ar ? 'طلب جديد' : 'Nouvelle'}</em><span className="order-row-menu"><MoreHorizontal /></span></div>)}</div>
 }
 
 function DashboardEmpty({ icon, text }: { icon: ReactNode; text: string }) {

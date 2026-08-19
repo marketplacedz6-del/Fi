@@ -142,6 +142,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .category-pills { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .category-pills button { height: 34px; border: 0; background: transparent; padding: 0 15px; font-size: 10px; color: #69655e; border-radius: 18px; }
 .category-pills button:hover, .category-pills button.active { color: white; background: var(--navy); }
+.category-pills .wishlist-filter { display: inline-flex; align-items: center; gap: 5px; }
 .toolbar-end { display: flex; align-items: center; gap: 10px; }
 .catalog-search { height: 36px; width: 190px; background: rgba(255,255,255,.65); border: 1px solid #ddd7cc; display: flex; align-items: center; padding: 0 12px; color: #8b867e; }
 .catalog-search input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; font-size: 9px; padding-inline-start: 8px; }
@@ -366,6 +367,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 .account-trigger.signed-in { color: var(--gold); background: #f1eadc; position: relative; }
 .account-trigger.signed-in::after { content: ''; position: absolute; width: 7px; height: 7px; border-radius: 50%; background: #2f956c; top: 4px; inset-inline-end: 3px; border: 2px solid var(--ivory); }
+.info-overlay { z-index: 118; }
+.info-modal { position: relative; width: min(560px, 100%); padding: 30px 42px 35px; background: var(--ivory); box-shadow: var(--shadow); animation: modal-up .3s ease both; }
+.info-modal > img { width: 105px; height: 80px; object-fit: contain; margin: -12px auto 3px; }
+.info-modal .eyebrow { justify-content: center; margin-bottom: 12px; }
+.info-modal h2 { margin: 0 0 14px; text-align: center; color: var(--navy); font-size: 25px; }
+.info-intro { margin: 0; color: var(--muted); font-size: 10px; line-height: 2.1; text-align: center; }
+.info-modal ul { list-style: none; margin: 20px 0 25px; padding: 16px; background: #f2ede4; display: grid; gap: 10px; }
+.info-modal li { display: flex; align-items: center; gap: 8px; color: #55524d; font-size: 9px; }
+.info-modal li svg { width: 15px; color: var(--gold); }
+.info-modal > .primary-button { margin-inline: auto; }
 .auth-overlay { z-index: 120; }
 .login-modal { position: relative; width: min(445px, 100%); background: var(--ivory); padding: 30px 43px 27px; text-align: center; box-shadow: 0 28px 90px rgba(8, 15, 25, .3); animation: modal-up .32s ease both; }
 .login-brand { width: 112px; height: 88px; margin: -7px auto 2px; }

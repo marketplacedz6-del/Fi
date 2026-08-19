@@ -295,12 +295,37 @@ const writeStorage = (key: string, value: unknown) => {
   try { localStorage.setItem(key, JSON.stringify(value)) } catch { /* Continue when storage is restricted. */ }
 }
 
+const loadCatalogProducts = () => {
+  const saved = readStorage<unknown>('ehs-products', null)
+  if (!Array.isArray(saved)) return defaultProducts
+  const normalized = saved.filter(item => item && typeof item === 'object').map((item, index) => {
+    const product = item as Partial<Product>
+    const fallback = defaultProducts.find(defaultProduct => defaultProduct.id === product.id) ?? defaultProducts[index % defaultProducts.length]
+    const image = typeof product.image === 'string' && product.image ? product.image : fallback.image
+    return {
+      ...fallback,
+      ...product,
+      id: Number(product.id) || Date.now() + index,
+      name: product.name?.ar ? product.name : fallback.name,
+      description: product.description?.ar ? product.description : fallback.description,
+      price: Number(product.price) || fallback.price,
+      image,
+      images: Array.isArray(product.images) && product.images.length ? product.images.filter(source => typeof source === 'string') : [image],
+      stock: Number.isFinite(Number(product.stock)) ? Math.max(0, Number(product.stock)) : fallback.stock ?? 10,
+      active: product.active !== false,
+    } as Product
+  })
+  return normalized.length ? normalized : defaultProducts
+}
+
 function App() {
   const [lang, setLang] = useState<Lang>(() => readStorage<Lang>('ehs-lang', 'ar'))
-  const [catalogProducts, setCatalogProducts] = useState<Product[]>(() => readStorage<Product[]>('ehs-products', defaultProducts))
+  const [catalogProducts, setCatalogProducts] = useState<Product[]>(loadCatalogProducts)
   const [cart, setCart] = useState<CartItem[]>(() => readStorage<CartItem[]>('ehs-cart', []))
   const [wishlist, setWishlist] = useState<number[]>(() => readStorage<number[]>('ehs-wishlist', []))
   const [category, setCategory] = useState<Category>('all')
+  const [wishlistOnly, setWishlistOnly] = useState(false)
+  const [infoModal, setInfoModal] = useState<'story' | 'privacy' | 'returns' | 'delivery' | 'faq' | null>(null)
   const [sort, setSort] = useState('newest')
   const [search, setSearch] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
@@ -356,10 +381,10 @@ function App() {
   }, [toast])
 
   useEffect(() => {
-    const shouldLock = cartOpen || menuOpen || !!quickProduct || checkoutOpen || !!orderId || loginOpen || accountOpen
+    const shouldLock = cartOpen || menuOpen || !!quickProduct || checkoutOpen || !!orderId || loginOpen || accountOpen || !!infoModal
     document.body.style.overflow = shouldLock ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
-  }, [cartOpen, menuOpen, quickProduct, checkoutOpen, orderId, loginOpen, accountOpen])
+  }, [cartOpen, menuOpen, quickProduct, checkoutOpen, orderId, loginOpen, accountOpen, infoModal])
 
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
@@ -370,6 +395,7 @@ function App() {
       setCheckoutOpen(false)
       setLoginOpen(false)
       setAccountOpen(false)
+      setInfoModal(null)
       setIsAuthenticated(false)
     }
     window.addEventListener('keydown', close)
@@ -386,13 +412,14 @@ function App() {
     const filtered = catalogProducts.filter(product => {
       const matchesCategory = category === 'all' || product.category === category
       if (product.active === false) return false
+      if (wishlistOnly && !wishlist.includes(product.id)) return false
       const text = `${product.name.ar} ${product.name.fr} ${product.description.ar} ${product.description.fr}`.toLowerCase()
       return matchesCategory && (!query || text.includes(query))
     })
     if (sort === 'low') return [...filtered].sort((a, b) => a.price - b.price)
     if (sort === 'high') return [...filtered].sort((a, b) => b.price - a.price)
     return filtered
-  }, [catalogProducts, category, search, sort])
+  }, [catalogProducts, category, search, sort, wishlistOnly, wishlist])
 
   const money = (value: number) => `${new Intl.NumberFormat(isAr ? 'ar-DZ' : 'fr-DZ').format(value)} ${isAr ? 'د.ج' : 'DA'}`
 
@@ -593,6 +620,14 @@ function App() {
     tableware: t.tableware, kitchen: t.kitchen, organization: t.organization, gifts: t.gifts,
   }
 
+  const informationPages = {
+    story: { title: isAr ? 'قصتنا' : 'Notre histoire', intro: t.storyText, points: [t.storyPoint1, t.storyPoint2, t.storyPoint3] },
+    privacy: { title: t.privacy, intro: isAr ? 'نحترم خصوصيتك. تُستخدم معلومات الاسم والهاتف والعنوان حصراً لمعالجة الطلب والتوصيل، ولا يتم بيع بياناتك لأي جهة.' : 'Vos données sont utilisées uniquement pour traiter et livrer votre commande. Elles ne sont jamais vendues.', points: [isAr ? 'تخزين آمن لبيانات الطلب' : 'Données de commande protégées', isAr ? 'يمكنك طلب حذف بياناتك' : 'Vous pouvez demander leur suppression', isAr ? 'لا نشارك البيانات دون ضرورة التوصيل' : 'Aucun partage hors livraison'] },
+    returns: { title: t.returns, intro: isAr ? 'يمكن طلب الاستبدال أو الاسترجاع عند وصول منتج تالف أو غير مطابق، بعد التواصل معنا خلال 48 ساعة من الاستلام.' : 'Un échange ou retour est possible pour un article endommagé ou non conforme, dans les 48 heures.', points: [isAr ? 'احتفظ بصور المنتج والتغليف' : 'Conservez les photos du produit', isAr ? 'تواصل مع الدعم برقم الطلب' : 'Contactez le support avec le numéro', isAr ? 'نعالج الطلب بعد التحقق' : 'Traitement après vérification'] },
+    delivery: { title: t.deliveryPolicy, intro: isAr ? 'نوصل الطلبات إلى 58 ولاية مع الدفع عند الاستلام. يتم الاتصال بك لتأكيد الطلب قبل الشحن.' : 'Livraison dans les 58 wilayas avec paiement à la réception et confirmation avant expédition.', points: [isAr ? 'تأكيد هاتفي قبل الشحن' : 'Confirmation téléphonique', isAr ? 'متابعة حالة الطلب' : 'Suivi de la commande', isAr ? 'تغليف يحمي المنتجات' : 'Emballage protecteur'] },
+    faq: { title: t.faq, intro: isAr ? 'الإجابات السريعة: الدفع عند الاستلام متاح، التوصيل يشمل 58 ولاية، ويمكن تعديل الطلب قبل شحنه عبر الدعم.' : 'Paiement à la réception, livraison nationale et modification possible avant expédition.', points: [isAr ? 'كيف أتابع طلبي؟ تواصل معنا برقم الطلب.' : 'Suivi : contactez-nous avec votre numéro.', isAr ? 'كيف أدفع؟ عند استلام الطلب.' : 'Paiement : à la réception.', isAr ? 'هل يمكن تعديل الطلب؟ نعم قبل الشحن.' : 'Modification : possible avant expédition.'] },
+  }
+
   return (
     <div className={`app ${isAr ? 'font-ar' : 'font-fr'}`}>
       <div className="announcement-bar">
@@ -634,7 +669,7 @@ function App() {
             <button className={`icon-button desktop-only account-trigger ${isAuthenticated ? 'signed-in' : ''}`} aria-label={t.account} onClick={openAccount}>
               {isAuthenticated ? <LayoutDashboard size={21} /> : <UserRound size={21} />}
             </button>
-            <button className="icon-button desktop-only badge-button" aria-label={t.wishlist} onClick={() => goToProducts()}>
+            <button className={`icon-button desktop-only badge-button ${wishlistOnly ? 'active' : ''}`} aria-label={t.wishlist} onClick={() => { setWishlistOnly(true); goToProducts() }}>
               <Heart size={21} />{wishlist.length > 0 && <span>{wishlist.length}</span>}
             </button>
             <button className="cart-button badge-button" onClick={() => setCartOpen(true)} aria-label={t.cart}>
@@ -698,8 +733,9 @@ function App() {
             <div className="product-toolbar">
               <div className="category-pills">
                 {(Object.keys(categoryLabels) as Category[]).map(key => (
-                  <button key={key} className={category === key ? 'active' : ''} onClick={() => setCategory(key)}>{categoryLabels[key]}</button>
+                  <button key={key} className={!wishlistOnly && category === key ? 'active' : ''} onClick={() => { setWishlistOnly(false); setCategory(key) }}>{categoryLabels[key]}</button>
                 ))}
+                <button className={wishlistOnly ? 'active wishlist-filter' : 'wishlist-filter'} onClick={() => setWishlistOnly(value => !value)}><Heart size={13} fill={wishlistOnly ? 'currentColor' : 'none'} /> {t.wishlist} ({wishlist.length})</button>
               </div>
               <div className="toolbar-end">
                 <label className="catalog-search">
@@ -745,7 +781,7 @@ function App() {
             <ul>
               {[t.storyPoint1, t.storyPoint2, t.storyPoint3].map(point => <li key={point}><Check size={16} /> {point}</li>)}
             </ul>
-            <button className="outline-button">{t.readStory} {isAr ? <ArrowLeft size={17} /> : <ArrowRight size={17} />}</button>
+            <button className="outline-button" onClick={() => setInfoModal('story')}>{t.readStory} {isAr ? <ArrowLeft size={17} /> : <ArrowRight size={17} />}</button>
           </div>
         </section>
 
@@ -805,7 +841,7 @@ function App() {
             </div>
           </div>
           <div className="footer-column"><h3>{t.links}</h3>{navLinks.slice(0, 4).map(([id, label]) => <a key={id} href={`#${id}`} onClick={e => stopLink(e, id)}>{label}</a>)}</div>
-          <div className="footer-column"><h3>{t.service}</h3><a href="#privacy">{t.privacy}</a><a href="#returns">{t.returns}</a><a href="#delivery">{t.deliveryPolicy}</a><a href="#faq">{t.faq}</a></div>
+          <div className="footer-column"><h3>{t.service}</h3><a href="#privacy" onClick={event => { event.preventDefault(); setInfoModal('privacy') }}>{t.privacy}</a><a href="#returns" onClick={event => { event.preventDefault(); setInfoModal('returns') }}>{t.returns}</a><a href="#delivery" onClick={event => { event.preventDefault(); setInfoModal('delivery') }}>{t.deliveryPolicy}</a><a href="#faq" onClick={event => { event.preventDefault(); setInfoModal('faq') }}>{t.faq}</a></div>
           <div className="footer-column contact-column"><h3>{t.contact}</h3><a href="tel:+213555000000"><Phone /> +213 555 00 00 00</a><a href="mailto:bonjour@elegance-home.dz"><Mail /> bonjour@elegance-home.dz</a><p><MapPin /> Alger, Algérie</p><p><Clock3 /> 24/7</p></div>
         </div>
         <div className="page-shell footer-bottom">
@@ -925,6 +961,20 @@ function App() {
         </div>
       )}
 
+      {infoModal && (
+        <div className="overlay modal-overlay info-overlay" onMouseDown={() => setInfoModal(null)}>
+          <article className="info-modal" role="dialog" aria-modal="true" onMouseDown={event => event.stopPropagation()}>
+            <button className="modal-close" onClick={() => setInfoModal(null)} aria-label={t.close}><X /></button>
+            <img src={assetPath('assets/logo.png')} alt="" />
+            <p className="eyebrow"><span /> Elegance Home & Style</p>
+            <h2>{informationPages[infoModal].title}</h2>
+            <p className="info-intro">{informationPages[infoModal].intro}</p>
+            <ul>{informationPages[infoModal].points.map(point => <li key={point}><CircleCheck /> {point}</li>)}</ul>
+            <button className="primary-button" onClick={() => setInfoModal(null)}>{isAr ? 'فهمت' : 'Compris'} <Check /></button>
+          </article>
+        </div>
+      )}
+
       {loginOpen && (
         <div className="overlay modal-overlay auth-overlay" onMouseDown={() => setLoginOpen(false)}>
           <div className="login-modal" role="dialog" aria-modal="true" aria-labelledby="login-title" onMouseDown={e => e.stopPropagation()}>
@@ -964,6 +1014,7 @@ function App() {
               products={catalogProducts}
               orders={storedOrders}
               cartCount={cartCount}
+              cartValue={subtotal}
               money={money}
               onClose={lockDashboard}
               onLogout={logout}
