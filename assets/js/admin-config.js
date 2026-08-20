@@ -146,19 +146,19 @@
       '<div class="field"><label>Google Analytics (كود كامل)</label><textarea id="p-gtag" rows="5" dir="ltr" style="direction:ltr;text-align:left;font-family:monospace;font-size:12px">' + EH.esc(s.pixels.gtag || '') + '</textarea></div>' +
       '</div>' +
 
-      /* ----- الربط ----- */
+      /* ----- الربط مع Google Sheets ----- */
       '<div class="tab-panel2 hidden" id="panel-connect">' +
-      (remote ? '<div class="notice ok">✅ المتجر مرتبط بـ Google Sheets — الطلبات تُرسل لحظياً والمنتجات تُقرأ من الجدول.</div>' :
-        '<div class="notice warn">⚠️ وضع تجريبي: البيانات والطلبات تُحفظ في متصفحك فقط. اربط Google Sheets لتفعيل العمل الحقيقي.</div>') +
+      '<div class="notice ok">✅ قاعدة البيانات الأساسية هي <b>Firebase Firestore</b> (المنتجات، الطلبات، الشحن، الكوبونات، الإعدادات) — كل شيء يُحفظ تلقائياً في مشروعك <code>marketplace-dz-f2732</code>.</div>' +
+      '<div class="notice ok" style="margin-top:8px">📤 <b>اختياري</b> — صدّر الطلبات لحظياً إلى Google Sheets بالأعمدة المطلوبة: <code>Order ID | Date | First Name | Last Name | Phone 1 | Phone 2 | Wilaya | Commune | Delivery Type | Address | Product SKU | Product Name | Quantity | Unit Price (DZD) | Total Amount (DZD) | Confirmation | Notes</code></div>' +
       '<div class="form-grid">' +
-      '<div class="field full"><label>رابط تطبيق Google Apps Script (Web App URL)</label><input id="api-url" dir="ltr" value="' + EH.esc(s.apiUrl || '') + '" placeholder="https://script.google.com/macros/s/…/exec"></div>' +
-      '<div class="field full"><label>الرمز السري (Access Token)</label><input id="api-token" dir="ltr" value="' + EH.esc(s.apiToken || '') + '" placeholder="من صفحة التهيئة: ?action=init"></div>' +
+      '<div class="field full"><label>رابط تطبيق Google Apps Script (Web App URL) — لتصدير الطلبات</label><input id="api-url" dir="ltr" value="' + EH.esc(s.apiUrl || '') + '" placeholder="https://script.google.com/macros/s/…/exec"></div>' +
+      '<div class="field full"><label>الرمز السري (Access Token) — اختياري</label><input id="api-token" dir="ltr" value="' + EH.esc(s.apiToken || '') + '" placeholder="من صفحة التهيئة: ?action=init"></div>' +
       '</div>' +
       '<div class="filters" style="margin-top:10px">' +
       '<button class="btn btn-gold" id="api-test">🔌 اختبار الاتصال</button>' +
-      '<button class="btn btn-ghost" id="api-clear">فصل الربط (رجوع للوضع التجريبي)</button>' +
+      '<button class="btn btn-ghost" id="api-clear">مسح الحقول</button>' +
       '</div>' +
-      '<div class="notice ok" style="margin-top:14px">📖 <b>طريقة الربط خطوة بخطوة:</b><br>1) أنشئ جدول Google Sheets جديد (أو استعمل جدولاً فارغاً).<br>2) من القائمة: الامتدادات ← Apps Script، واحذف الكود الموجود والصق كود <b>Code.gs</b> الموجود في مجلد <code>google-apps-script</code> بالمشروع.<br>3) انشر: Deploy ← New deployment ← Web app (تنفيذ بصفتك: أنا — الوصول: أي شخص). انسخ رابط الـ URL.<br>4) افتح الرابط وأضف <code>?action=init</code> في النهاية — ستظهر صفحة بها الرمز السري.<br>5) الصق الرابط والرمز في الحقلين أعلاه واحفظ.</div>' +
+      '<div class="notice ok" style="margin-top:14px">📖 <b>تفعيل تصدير الطلبات إلى Google Sheets:</b><br>1) أنشئ جدول Google Sheets جديد (أو استعمل جدولاً فارغاً).<br>2) من القائمة: الامتدادات ← Apps Script، واحذف الكود الموجود والصق كود <b>Code.gs</b> الموجود في مجلد <code>google-apps-script</code> بالمشروع.<br>3) انشر: Deploy ← New deployment ← Web app (تنفيذ بصفتك: أنا — الوصول: أي شخص). انسخ رابط الـ URL.<br>4) افتح الرابط وأضف <code>?action=init</code> في النهاية — سيُنشئ الجدول <b>Orders</b> بالأعمدة أعلاه.<br>5) الصق الرابط في حقل «رابط تطبيق Google Apps Script» ثم اضغط حفظ كل الإعدادات. الطلبات ستصل تلقائياً.</div>' +
       '</div>' +
 
       /* ----- الأمان ----- */
@@ -169,7 +169,7 @@
       '<div class="field"><label>البريد الإلكتروني للدخول</label><input type="email" id="new-email" value="' + EH.esc(s.adminEmail || 'walid@gmail.com') + '" placeholder="walid@gmail.com"></div>' +
       '<div class="field full"><button class="btn btn-gold" id="pin-change">🔒 حفظ بيانات الدخول</button></div>' +
       '</div>' +
-      '<div class="notice warn" style="margin-top:10px">يُحفظ البريد وكلمة السر داخل المتصفح (طبيعة الاستضافة المجانية) — اختر كلمة سر قوية.</div>' +
+      '<div class="notice warn" style="margin-top:10px">يُدار حساب الدخول عبر <b>Firebase Authentication</b>. أدخل كلمة السر الحالية ثم الجديدة (أو اتركها فارغة للإبقاء عليها) والبريد الإلكتروني ثم اضغط حفظ.</div>' +
       (S.demo ? '<div class="notice warn" style="margin-top:10px">🧹 وضع تجريبي: يمكنك مسح جميع البيانات المحلية (المنتجات والطلبات والإعدادات) والعودة للأصلية:</div>' +
         '<button class="btn btn-danger" id="reset-local">🗑️ مسح البيانات التجريبية المحلية</button>' : '') +
       '</div>' +
@@ -228,14 +228,9 @@
       var token = document.getElementById('api-token').value.trim();
       if (!url) { EH.Admin.toast('أدخل رابط التطبيق أولاً', 'err'); return; }
       EH.Admin.toast('جارٍ اختبار الاتصال…');
-      // حفظ مؤقت ثم اختبار
-      var st = JSON.parse(JSON.stringify(S.data.settings));
-      st.apiUrl = url;
-      st.apiToken = token || ' ';
-      EH.apiGetData(true).then(function () {});
-      fetch(String(url).replace(/\/+$/, '') + '?action=getData').then(function (r) { return r.json(); }).then(function (res) {
-        if (res && res.ok === false) { EH.Admin.toast('⚠️ الرابط يعمل لكن يلزم التهيئة: ?action=init', 'err'); return; }
-        EH.Admin.toast('✅ الاتصال ناجح — اضغط حفظ', 'ok');
+      fetch(String(url).replace(/\/+$/, '') + '?action=test').then(function (r) { return r.json(); }).then(function (res) {
+        if (res && res.ok === true) { EH.Admin.toast('✅ الاتصال ناجح — اضغط حفظ', 'ok'); }
+        else EH.Admin.toast('⚠️ الرابط يعمل لكن يلزم التهيئة: ?action=init', 'err');
       }).catch(function () { EH.Admin.toast('تعذر الوصول للرابط', 'err'); });
     });
     document.getElementById('api-clear').addEventListener('click', function () {
@@ -243,37 +238,49 @@
       document.getElementById('api-token').value = '';
     });
 
-    // تغيير بيانات الدخول
+    // تغيير بيانات الدخول (حساب Firebase)
     document.getElementById('pin-change').addEventListener('click', function () {
       var old = document.getElementById('pin-old').value;
       var nw = document.getElementById('pin-new').value;
       var email = document.getElementById('new-email').value.trim();
       if (!old) { EH.Admin.toast('أدخل كلمة السر الحالية', 'err'); return; }
       if (!email || email.indexOf('@') === -1) { EH.Admin.toast('أدخل بريداً إلكترونياً صحيحاً', 'err'); return; }
-      EH.Admin.hashPin(old).then(function (hOld) {
+      if (nw && String(nw).length < 6) { EH.Admin.toast('كلمة السر الجديدة قصيرة جداً (6 أحرف على الأقل)', 'err'); return; }
+
+      var fa = (window.firebase && window.firebase.auth) ? window.firebase.auth() : null;
+      var user = fa ? fa.currentUser : null;
+      if (!user) {
+        // وضع محلي: نحفظ البريد فقط (كلمة السر عبر Firebase عند التفعيل)
+        var st0 = S.data.settings;
+        st0.adminEmail = email;
+        EH.localSave('settings', st0).then(function () { EH.Admin.toast('تم حفظ البريد محلياً ✓', 'ok'); });
+        return;
+      }
+      var cred = window.firebase.auth.EmailAuthProvider.credential(user.email, old);
+      var btn = document.getElementById('pin-change');
+      btn.disabled = true;
+      btn.textContent = '⏳ جارٍ…';
+      user.reauthenticateWithCredential(cred).then(function () {
+        var jobs = [];
+        if (nw) jobs.push(user.updatePassword(nw));
+        if (email && email !== user.email) jobs.push(user.updateEmail(email));
+        return Promise.all(jobs);
+      }).then(function () {
         var st = S.data.settings;
-        var wantHash = String(st.adminPassHash || '');
-        var valid = !wantHash ? EH.Admin.hashPin('2009').then(function (d) { return hOld === d; }) : Promise.resolve(hOld === wantHash);
-        valid.then(function (ok) {
-          if (!ok) { EH.Admin.toast('كلمة السر الحالية غير صحيحة', 'err'); return; }
-          st.adminEmail = email;
-          if (nw) {
-            if (String(nw).length < 4) { EH.Admin.toast('كلمة السر الجديدة قصيرة جداً (4 أحرف على الأقل)', 'err'); return; }
-            EH.Admin.hashPin(nw).then(function (hNew) {
-              st.adminPassHash = hNew;
-              finishSave();
-            });
-          } else {
-            finishSave();
-          }
-          function finishSave() {
-            if (S.demo) EH.localSave('settings', st).then(function () { EH.Admin.toast('تم تحديث بيانات الدخول ✓', 'ok'); });
-            else EH.saveSettings(st).then(function (res) {
-              if (res.ok) EH.Admin.toast('تم تحديث بيانات الدخول ✓', 'ok');
-              else EH.Admin.toast((res && res.error) || 'فشل الحفظ', 'err');
-            });
-          }
-        });
+        st.adminEmail = email;
+        return EH.saveSettings(st);
+      }).then(function (res) {
+        if (res.ok) EH.Admin.toast('تم تحديث بيانات الدخول ✓', 'ok');
+        else EH.Admin.toast((res && res.error) || 'فشل الحفظ', 'err');
+      }).catch(function (err) {
+        var code = (err && err.code) || '';
+        var msg = (err && err.message) || 'فشل التحديث';
+        if (code === 'auth/wrong-password') msg = 'كلمة السر الحالية غير صحيحة';
+        else if (code === 'auth/email-already-in-use') msg = 'هذا البريد مستعمل في حساب آخر';
+        EH.Admin.toast(msg, 'err');
+      }).finally(function () {
+        btn.disabled = false;
+        btn.textContent = '🔒 حفظ بيانات الدخول';
       });
     });
 

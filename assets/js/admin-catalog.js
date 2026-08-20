@@ -14,11 +14,33 @@
     el.innerHTML =
       '<div class="card"><h3>🛍️ المنتجات <span class="sub">' + products.length + ' منتج</span></h3>' +
       '<div class="filters"><button class="btn btn-gold" id="btn-new-product">+ منتج جديد</button>' +
+      (S.demo ? '' : '<button class="btn btn-ghost" id="btn-seed" title="استيراد المنتجات التجريبية (14 منتجاً) إلى Firebase">📥 استيراد منتجات تجريبية</button>') +
       '<select id="p-filter"><option value="all">كل المنتجات</option><option value="fragrance">عطور المنزل</option><option value="fashion">الأزياء</option><option value="out">نفد من المخزون</option></select></div>' +
       '<div id="products-list"></div></div>';
 
     document.getElementById('btn-new-product').addEventListener('click', function () { editProduct(null); });
     document.getElementById('p-filter').addEventListener('change', function () { renderList(products); });
+
+    var seedBtn = document.getElementById('btn-seed');
+    if (seedBtn) seedBtn.addEventListener('click', function () {
+      EH.Admin.confirm('سيتم إضافة 14 منتجاً تجريبياً (عطور منزلية وأزياء) إلى قاعدة بيانات Firebase إن لم تكن موجودة. متابعة؟', function () {
+        seedBtn.disabled = true;
+        seedBtn.textContent = '⏳ جارٍ الاستيراد…';
+        fetch('assets/data/seed.json', { cache: 'no-cache' })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            var prods = j.products || [];
+            var jobs = prods.map(function (p) { return EH.saveProduct(p); });
+            return Promise.all(jobs);
+          })
+          .then(function () {
+            EH.Admin.toast('تم استيراد المنتجات ✓', 'ok');
+            EH.Admin.reload().then(function () { render(document.getElementById('admin-content')); });
+          })
+          .catch(function (e) { EH.Admin.toast('فشل الاستيراد', 'err'); seedBtn.disabled = false; seedBtn.textContent = '📥 استيراد منتجات تجريبية'; });
+      });
+    });
+
     renderList(products);
   }
 

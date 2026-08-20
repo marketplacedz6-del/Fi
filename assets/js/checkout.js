@@ -80,9 +80,11 @@
       /* ---------- النموذج ---------- */
       '<div><div class="card" style="background:var(--surface);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);margin-bottom:16px">' +
       '<div class="section-title" style="margin-top:0">👤 بيانات العميل</div>' +
-      '<div class="field"><label>الاسم الكامل <span class="req">*</span></label><input id="f-name" type="text" placeholder="الاسم واللقب" autocomplete="name"></div>' +
-      '<div class="field"><label>رقم الهاتف <span class="req">*</span></label><input id="f-phone" type="tel" inputmode="numeric" placeholder="05XXXXXXXX" autocomplete="tel" dir="ltr" style="text-align:right">' +
+      '<div class="field"><label>الاسم <span class="req">*</span></label><input id="f-first" type="text" placeholder="مثال: أمينة" autocomplete="given-name"></div>' +
+      '<div class="field"><label>اللقب <span class="req">*</span></label><input id="f-last" type="text" placeholder="مثال: بن علي" autocomplete="family-name"></div>' +
+      '<div class="field"><label>رقم الهاتف 1 <span class="req">*</span></label><input id="f-phone" type="tel" inputmode="numeric" placeholder="05XXXXXXXX" autocomplete="tel" dir="ltr" style="text-align:right">' +
       '<div class="hint">مثال: 0550123456 — سنتصل بك لتأكيد الطلب</div></div>' +
+      '<div class="field"><label>رقم الهاتف 2 (احتياطي — اختياري)</label><input id="f-phone2" type="tel" inputmode="numeric" placeholder="05XXXXXXXX" dir="ltr" style="text-align:right"></div>' +
       '<div class="field"><label>الولاية <span class="req">*</span></label><select id="f-wilaya"><option value="">— اختر الولاية —</option></select></div>' +
       '<div class="field"><label>البلدية <span class="req">*</span></label><select id="f-commune" disabled><option value="">اختر الولاية أولاً</option></select></div>' +
       '<div class="field"><label>العنوان (اختياري)</label><input id="f-address" type="text" placeholder="الحي، الشارع، رقم المنزل…"></div>' +
@@ -144,7 +146,8 @@
   }
 
   function bindEvents() {
-    var fName = document.getElementById('f-name');
+    var fFirst = document.getElementById('f-first');
+    var fLast = document.getElementById('f-last');
     var fPhone = document.getElementById('f-phone');
     var fWilaya = document.getElementById('f-wilaya');
     var fCommune = document.getElementById('f-commune');
@@ -177,8 +180,11 @@
     fPhone.addEventListener('input', function () {
       fPhone.parentElement.classList.toggle('invalid', fPhone.value.trim() !== '' && !EH.validPhone(fPhone.value));
     });
-    fName.addEventListener('input', function () {
-      fName.parentElement.classList.toggle('invalid', fName.value.trim() !== '' && fName.value.trim().length < 4);
+    fFirst.addEventListener('input', function () {
+      fFirst.parentElement.classList.toggle('invalid', fFirst.value.trim() !== '' && fFirst.value.trim().length < 2);
+    });
+    fLast.addEventListener('input', function () {
+      fLast.parentElement.classList.toggle('invalid', fLast.value.trim() !== '' && fLast.value.trim().length < 2);
     });
 
     // خيارات التوصيل
@@ -302,14 +308,16 @@
 
   function validate() {
     var ok = true;
-    var fName = document.getElementById('f-name');
+    var fFirst = document.getElementById('f-first');
+    var fLast = document.getElementById('f-last');
     var fPhone = document.getElementById('f-phone');
     var fWilaya = document.getElementById('f-wilaya');
     var fCommune = document.getElementById('f-commune');
 
     var setInvalid = function (el, bad) { el.parentElement.classList.toggle('invalid', bad); };
 
-    if (fName.value.trim().length < 4) { setInvalid(fName, true); ok = false; } else setInvalid(fName, false);
+    if (fFirst.value.trim().length < 2) { setInvalid(fFirst, true); ok = false; } else setInvalid(fFirst, false);
+    if (fLast.value.trim().length < 2) { setInvalid(fLast, true); ok = false; } else setInvalid(fLast, false);
     if (!EH.validPhone(fPhone.value)) { setInvalid(fPhone, true); ok = false; } else setInvalid(fPhone, false);
     if (!sel.wilaya) { setInvalid(fWilaya, true); ok = false; } else setInvalid(fWilaya, false);
     if (!sel.commune) { setInvalid(fCommune, true); ok = false; } else setInvalid(fCommune, false);
@@ -339,8 +347,11 @@
     var order = {
       id: '',
       customer: {
-        name: document.getElementById('f-name').value.trim(),
+        firstName: document.getElementById('f-first').value.trim(),
+        lastName: document.getElementById('f-last').value.trim(),
+        name: (document.getElementById('f-first').value.trim() + ' ' + document.getElementById('f-last').value.trim()).trim(),
         phone: EH.normalizePhone(document.getElementById('f-phone').value),
+        phone2: EH.normalizePhone(document.getElementById('f-phone2').value),
         wilayaId: sel.wilaya,
         wilaya: wilayaName,
         commune: sel.commune,
