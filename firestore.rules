@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==== بيانات عامة (يقرأها المتجر دون تسجيل دخول) ====
+
+    // الإعدادات العامة (اسم المتجر، الشحن الافتراضي، البيكسلز، الروابط)
+    match /settings/{doc} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // المنتجات
+    match /products/{doc} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // أسعار الشحن حسب الولاية
+    match /shipping/{doc} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // كوبونات الخصم
+    match /coupons/{doc} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // ==== الطلبات ====
+    // أي زبون ينشئ طلباً (public create)، لكن قراءة/تعديل/حذف الطلبات
+    // محصورة على المدير المسجّل فقط (Firebase Auth).
+    match /orders/{orderId} {
+      allow create: if true;
+      allow read, update, delete: if request.auth != null;
+    }
+  }
+}

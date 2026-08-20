@@ -52,28 +52,13 @@
     }
   };
 
-  /* ---------- الدخول (بريد إلكتروني + كلمة سر) ---------- */
-  // تجزئة كلمة السر: SHA-256 خالص يعمل في كل المتصفحات والبيئات (HTTPS و HTTP)
-  function hashPin(pin) {
-    try {
-      return Promise.resolve(EH.sha256(pin));
-    } catch (e) {
-      return Promise.resolve(String(pin));
-    }
-  }
-  EH.Admin.hashPin = hashPin;
+  /* ---------- الدخول عبر Firebase Auth ---------- */
+  // محفوظ للتوافق فقط — لم يعد يُستخدم للتحقق من الدخول
+  EH.Admin.hashPin = function (pin) {
+    try { return Promise.resolve(EH.sha256(pin)); } catch (e) { return Promise.resolve(String(pin)); }
+  };
 
-  function checkLogin(email, pass) {
-    if (!S.data || !S.data.settings) return Promise.resolve(false);
-    var st = S.data.settings;
-    var wantEmail = String(st.adminEmail || 'walid@gmail.com').trim().toLowerCase();
-    if (String(email || '').trim().toLowerCase() !== wantEmail) return Promise.resolve(false);
-    var wantHash = String(st.adminPassHash || '');
-    return hashPin(pass).then(function (h) {
-      if (!wantHash) return hashPin('2009').then(function (def) { return h === def; });
-      return h === wantHash;
-    });
-  }
+  var authMode = 'login';
 
   function showLogin() {
     document.getElementById('admin-login').classList.remove('hidden');
@@ -87,29 +72,74 @@
     EH.Admin.showSection();
   }
 
+  function setAuthMode(mode) {
+    authMode = mode;
+    var b = document.getElementById('pin-btn');
+    var hint = document.getElementById('auth-hint');
+    if (b) b.textContent = mode === 'login' ? 'دخول' : 'إنشاء الحساب';
+    if (hint) hint.textContent = mode === 'login'
+      ? 'سجّل الدخول بحسابك المسجل في Firebase Authentication.'
+      : 'سيُسجَّل هذا البريد وكلمة السر كحساب مدير في Firebase.';
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     var emailInput = document.getElementById('login-email');
     var passInput = document.getElementById('login-pass');
     var pinBtn = document.getElementById('pin-btn');
-    var tryLogin = function () {
-      if (!S.data) { EH.Admin.toast('جارٍ تحميل البيانات، حاول بعد لحظة…'); return; }
-      checkLogin(emailInput.value, passInput.value).then(function (ok) {
-        if (ok) {
-          sessionStorage.setItem('eh.admin.sess', '1');
-          EH.Admin.toast('مرحباً بك 👋');
-          showApp();
-        } else {
-          EH.Admin.toast('البريد الإلكتروني أو كلمة السر غير صحيحة', 'err');
-          passInput.value = '';
-          passInput.focus();
-        }
+    var toggleBtn = document.getElementById('toggle-auth');
+
+    if (toggleBtn) toggleBtn.addEventListener('click', function () {
+      setAuthMode(authMode === 'login' ? 'register' : 'login');
+    });
+
+    function tryAuth() {
+      var email = emailInput.value.trim();
+      var pass = passInput.value;
+      if (!email || !pass) { EH.Admin.toast('أدخل البريد الإلكتروني وكلمة السر', 'err'); return; }
+      if (!window.firebase || !window.firebase.auth) { EH.Admin.toast('تعذر تحميل Firebase — تحقق من اتصالك بالإنترنت', 'err'); return; }
+      var fa = window.firebase.auth();
+      var p;
+      if (authMode === 'register') {
+        if (String(pass).length < 6) { EH.Admin.toast('كلمة السر يجب أن تكون 6 أحرف على الأقل', 'err'); return; }
+        p = fa.createUserWithEmailAndPassword(email, pass);
+      } else {
+        p = fa.signInWithEmailAndPassword(email, pass);
+      }
+      pinBtn.disabled = true;
+      pinBtn.textContent = '⏳ جارٍ…';
+      p.then(function () {
+        try {
+          var st = (S.data && S.data.settings) ? JSON.parse(JSON.stringify(S.data.settings)) : {};
+          st.adminEmail = email;
+          if (!S.demo) EH.saveSettings(st).catch(function () {});
+        } catch (e) {}
+        EH.Admin.toast('مرحباً بك 👋', 'ok');
+        sessionStorage.setItem('eh.admin.sess', '1');
+        showApp();
+      }).catch(function (err) {
+        var code = (err && err.code) || '';
+        var msg = (err && err.message) || 'حدث خطأ';
+        if (code === 'auth/email-already-in-use') { setAuthMode('login'); msg = 'هذا البريد مسجّل بالفعل — سجّل الدخول.'; }
+        else if (code === 'auth/invalid-email') msg = 'البريد الإلكتروني غير صالح';
+        else if (code === 'auth/wrong-password' || code === 'auth/user-not-found') msg = 'البريد الإلكتروني أو كلمة السر غير صحيحة';
+        else if (code === 'auth/too-many-requests') msg = 'طلبات كثيرة — حاول لاحقاً';
+        else if (code === 'auth/weak-password') msg = 'كلمة السر ضعيفة (6 أحرف على الأقل)';
+        EH.Admin.toast(msg, 'err');
+        passInput.value = '';
+        passInput.focus();
+      }).finally(function () {
+        pinBtn.disabled = false;
+        pinBtn.textContent = authMode === 'login' ? 'دخول' : 'إنشاء الحساب';
       });
-    };
-    pinBtn.addEventListener('click', tryLogin);
-    passInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') tryLogin(); });
+    }
+
+    pinBtn.addEventListener('click', tryAuth);
+    passInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') tryAuth(); });
     emailInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') passInput.focus(); });
     document.getElementById('logout-btn').addEventListener('click', function () {
       sessionStorage.removeItem('eh.admin.sess');
+      if (window.firebase && window.firebase.auth) window.firebase.auth().signOut().catch(function () {});
+      setAuthMode('login');
       showLogin();
     });
     window.addEventListener('hashchange', EH.Admin.showSection);
@@ -194,7 +224,7 @@
       '<div class="filters">' +
       '<button class="btn btn-sm btn-ghost" id="btn-export-all">📄 تصدير Excel/CSV (كامل)</button>' +
       '<button class="btn btn-sm btn-ghost" id="btn-export-delivery">🚚 تصدير بوليصات شركات التوصيل</button>' +
-      '<button class="btn btn-sm" id="btn-refresh">🔄 تحديث من Google Sheets</button>' +
+      '<button class="btn btn-sm" id="btn-refresh">🔄 تحديث الطلبات</button>' +
       '</div>' +
       '<div id="orders-list"><div class="skeleton" style="height:120px"></div></div></div>';
 
@@ -351,17 +381,27 @@
       });
       downloadCSV('bolyas-' + d + '.csv', headers, rows);
     } else {
+      // تصدير كامل بالأعمدة المطلوبة — صف لكل منتج في الطلب
       var headers2 = EH.CONFIG.ORDER_COLUMNS;
-      var rows2 = list.map(function (o) {
+      var rows2 = [];
+      list.forEach(function (o) {
         var c = o.customer || {};
-        var dt = o.createdAt ? String(o.createdAt) : '';
-        return [
-          dt.slice(0, 10), dt.slice(11, 19), o.id || '', c.name || '', c.phone || '',
-          c.wilaya || '', c.commune || '', o.itemsText || '', o.totalQty || 0,
-          o.productsTotal || 0, o.shippingCost || 0, o.shippingKind || '', o.total || 0,
-          EH.CONFIG.STATUS_LABEL(o.status || 'review'),
-          c.address || '', c.notes || '', o.coupon || '', o.discount || 0
-        ];
+        var dt = o.createdAt ? String(o.createdAt).replace('T', ' ') : '';
+        var full = c.name || [c.firstName, c.lastName].filter(Boolean).join(' ') || '';
+        var fname = c.firstName || String(full).split(/\s+/)[0] || '';
+        var lname = c.lastName || String(full).split(/\s+/).slice(1).join(' ') || '';
+        var items = (o.items && o.items.length) ? o.items : [{ sku: '', name: o.itemsText || '', qty: o.totalQty || 0, price: 0 }];
+        items.forEach(function (it) {
+          var qty = Number(it.qty) || 1;
+          var price = Number(it.price) || 0;
+          rows2.push([
+            o.id || '', dt, fname, lname,
+            c.phone || '', c.phone2 || '', c.wilaya || '', c.commune || '',
+            o.shippingKind === 'مكتب' ? 'Desk' : 'Home', c.address || '',
+            it.sku || '', it.name || '', qty, price, Math.round(price * qty),
+            o.confirmation || EH.CONFIG.STATUS_LABEL(o.status || 'review'), c.notes || ''
+          ]);
+        });
       });
       downloadCSV('orders-' + d + '.csv', headers2, rows2);
     }
@@ -371,8 +411,16 @@
   /* ---------- التشغيل ---------- */
   EH.Admin.reload().then(function () {
     var sess = sessionStorage.getItem('eh.admin.sess') === '1';
-    if (sess) showApp();
-    else showLogin();
+    if (window.firebase && window.firebase.auth) {
+      window.firebase.auth().onAuthStateChanged(function (user) {
+        if (user || sess) showApp();
+        else showLogin();
+      });
+    } else if (sess) {
+      showApp();
+    } else {
+      showLogin();
+    }
   }).catch(function () {
     // حتى لو فشل تحميل البيانات، تبقى شاشة الدخول ظاهرة
     showLogin();

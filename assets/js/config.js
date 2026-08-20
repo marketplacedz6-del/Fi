@@ -33,11 +33,21 @@ EH.CONFIG = {
   },
   // أعمدة جدول الطلبات في Google Sheets (بالترتيب المطلوب)
   ORDER_COLUMNS: [
-    'تاريخ الطلب', 'توقيت الطلب', 'رقم الطلب', 'اسم العميل', 'رقم الهاتف',
-    'الولاية', 'البلدية', 'المنتجات المطلوبة', 'الكمية',
-    'إجمالي مبلغ المنتجات', 'تكلفة الشحن', 'نوع الشحن', 'المبلغ الإجمالي', 'حالة الطلب',
-    'العنوان', 'ملاحظات', 'كود الخصم', 'قيمة الخصم'
+    'Order ID', 'Date', 'First Name', 'Last Name', 'Phone 1', 'Phone 2',
+    'Wilaya', 'Commune', 'Delivery Type', 'Address', 'Product SKU', 'Product Name',
+    'Quantity', 'Unit Price (DZD)', 'Total Amount (DZD)', 'Confirmation', 'Notes'
   ]
+};
+
+// ===== إعدادات Firebase (قاعدة البيانات) =====
+EH.FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDFLGuXce7yrneT0ci5mXXat36C67FzIwk",
+  authDomain: "marketplace-dz-f2732.firebaseapp.com",
+  projectId: "marketplace-dz-f2732",
+  storageBucket: "marketplace-dz-f2732.firebasestorage.app",
+  messagingSenderId: "495030664220",
+  appId: "1:495030664220:web:fa65a9504baa442616b3d9",
+  measurementId: "G-VMC957MRJ3"
 };
 
 // تنسيق السعر

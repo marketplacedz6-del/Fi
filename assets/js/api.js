@@ -1,14 +1,46 @@
-/* ===== طبقة البيانات: Google Sheets (Apps Script) + وضع تجريبي محلي ===== */
+/* =====================================================================
+ *  طبقة البيانات — Firebase (Firestore + Storage + Auth)
+ *  المتجر يعمل على استضافة GitHub Pages المجانية، وقاعدة بياناته هي
+ *  Firebase: المنتجات/الطلبات/الشحن/الكوبونات/الإعدادات في Firestore،
+ *  الصور تُرفع إلى Firebase Storage، والدخول للوحة التحكم عبر Firebase Auth.
+ *  كما تُصدَّر الطلبات (best-effort) إلى Google Sheets عبر Apps Script
+ *  بالأعمدة المطلوبة إذا أُدخل رابط التطبيق في الإعدادات.
+ * ===================================================================== */
 (function () {
   'use strict';
 
   var LS = EH.CONFIG.LS;
   var _seed = null;
-  var _data = null;       // البيانات الحالية {settings, products, shipping, shippingDefaults, freeShipping, coupons}
-  var _mediaCache = {};
+  var _data = null;        // البيانات الحالية {settings, products, shipping, shippingDefaults, freeShipping, coupons}
   var _notified = false;
+  var _firebaseReady = false;
+  var _mediaCache = {};
 
-  // خطة احتياطية: بيانات دنيا حتى لا تبقى الصفحات فارغة عند فشل التحميل
+  /* ---------- تهيئة Firebase ---------- */
+  function initFirebase() {
+    if (window.firebase && window.firebase.apps && window.firebase.apps.length) {
+      _firebaseReady = true;
+      return;
+    }
+    try {
+      if (window.firebase && window.firebase.initializeApp) {
+        window.firebase.initializeApp(EH.FIREBASE_CONFIG);
+        _firebaseReady = true;
+      }
+    } catch (e) { _firebaseReady = false; }
+    return _firebaseReady;
+  }
+  EH.firebaseReady = function () { return _firebaseReady; };
+
+  function db() { return window.firebase ? window.firebase.firestore() : null; }
+  function auth() { return window.firebase ? window.firebase.auth() : null; }
+  function storage() { return window.firebase ? window.firebase.storage() : null; }
+  function currentUser() {
+    var a = auth();
+    return (a && a.currentUser) ? a.currentUser : null;
+  }
+
+  /* ---------- خطة احتياطية: بيانات دنيا حتى لا تبقى الصفحات فارغة ---------- */
   var _seedFailed = false;
   function fallbackSeed() {
     return {
@@ -21,7 +53,7 @@
         logo: 'assets/img/brand/logo-trans.webp', footerText: '',
         hero: { kind: 'image', src: 'assets/img/brand/hero.webp', title: 'أناقة تعبق بالعطر', subtitle: '', ctaText: 'تسوّق الآن', ctaUrl: 'shop.html' },
         pixels: { meta: '', tiktok: '', gtag: '' }, facebook: '', instagram: '', tiktokUrl: '',
-        adminEmail: 'walid@gmail.com', adminPassHash: '', apiUrl: '', apiToken: '', connected: false
+        adminEmail: '', adminPassHash: '', apiUrl: '', apiToken: '', connected: false
       }
     };
   }
@@ -29,10 +61,7 @@
   function loadSeed() {
     if (_seed) return Promise.resolve(_seed);
     return fetch('assets/data/seed.json', { cache: 'no-cache' })
-      .then(function (r) {
-        if (!r.ok) throw new Error('seed');
-        return r.json();
-      })
+      .then(function (r) { if (!r.ok) throw new Error('seed'); return r.json(); })
       .then(function (j) { _seed = j; return j; })
       .catch(function () {
         _seedFailed = true;
@@ -65,155 +94,320 @@
     };
   }
 
-  function isRemoteConfigured(settings) {
-    return !!(settings && settings.connected === true && settings.apiUrl);
-  }
+  /* ---------- قراءة البيانات من Firestore ---------- */
+  function fbDoc(col, id) { return db().collection(col).doc(id).get(); }
+  function fbCol(col) { return db().collection(col).get(); }
 
-  // طلب عام إلى Google Apps Script
-  function callScript(url, payload) {
-    var opts = {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
-    };
-    return fetch(url, opts).then(function (r) {
-      return r.json().catch(function () { return { ok: false, error: 'استجابة غير صالحة من الخادم' }; });
+  function readSettingsFB() {
+    return fbDoc('settings', 'store').then(function (snap) {
+      return snap.exists ? snap.data() : null;
     });
   }
 
-  function buildApiUrl(base) {
-    return String(base).replace(/\/+$/, '');
+  function readProductsFB() {
+    return fbCol('products').then(function (snap) {
+      return snap.docs.map(function (d) { return d.data(); });
+    });
   }
 
-  /* ---------- البيانات العامة (المتجر) ---------- */
+  function readShippingFB() {
+    return fbCol('shipping').then(function (snap) {
+      var matrix = {};
+      snap.docs.forEach(function (d) {
+        var r = d.data() || {};
+        var row = {};
+        if (r.home != null) row.home = Number(r.home);
+        if (r.desk != null) row.desk = Number(r.desk);
+        if (r.free) row.free = true;
+        if (r.freeOver != null) row.freeOver = Number(r.freeOver);
+        matrix[d.id] = row;
+      });
+      return matrix;
+    });
+  }
+
+  function readCouponsFB() {
+    return fbCol('coupons').then(function (snap) {
+      return snap.docs.map(function (d) { return d.data(); });
+    });
+  }
+
+  // إعدادات عامة افتراضية
+  function defaultSettings() {
+    return {
+      storeName: 'Elegance Home & Style', storeNameAr: 'إليغانس هوم أند ستايل',
+      tagline: 'عطور منزلية وأزياء راقية', phone: '', whatsapp: '', currency: 'دج',
+      logo: 'assets/img/brand/logo-trans.webp', footerText: '',
+      hero: { kind: 'image', src: 'assets/img/brand/hero.webp', title: 'أناقة تعبق بالعطر', subtitle: '', ctaText: 'تسوّق الآن', ctaUrl: 'shop.html' },
+      pixels: { meta: '', tiktok: '', gtag: '' }, facebook: '', instagram: '', tiktokUrl: '',
+      adminEmail: '', adminPassHash: '', apiUrl: '', apiToken: '', connected: true
+    };
+  }
+
+  // البيانات العامة (المتجر) — تُقرأ من Firestore، مع احتياط محلي
   EH.apiGetData = function (force) {
     return loadSeed().then(function (seed) {
       var locals = readLocalOverrides();
-      var settings = deepMerge(seed.settings, locals.settings);
+      var localSettings = deepMerge(seed.settings, locals.settings);
 
-      if (isRemoteConfigured(settings)) {
-        // وضع الربط مع Google Sheets
-        var cacheKey = LS.cache;
-        if (!force) {
-          var c = EH.lsGet(cacheKey, null);
-          if (c && c.t && (Date.now() - c.t) < 60 * 1000) { _data = c.d; return _data; }
-        }
-        var url = buildApiUrl(settings.apiUrl) + '?action=getData';
-        return fetch(url).then(function (r) { return r.json(); }).then(function (res) {
-          if (!res || res.ok === false) throw new Error(res && res.error ? res.error : 'فشل الاتصال');
+      if (!initFirebase() || !db()) {
+        // Firebase غير متاح → وضع محلي
+        _data = {
+          settings: deepMerge(localSettings, { connected: false }),
+          products: locals.products || seed.products,
+          shipping: locals.shipping || {},
+          shippingDefaults: locals.shippingDefaults || seed.shippingDefaults,
+          freeShipping: locals.freeShipping || seed.freeShipping,
+          coupons: locals.coupons || seed.coupons
+        };
+        return _data;
+      }
+
+      // Firebase متاح → نقرأ البيانات الحقيقية
+      var cacheKey = LS.cache;
+      if (!force) {
+        var c = EH.lsGet(cacheKey, null);
+        if (c && c.t && (Date.now() - c.t) < 60 * 1000 && c.d && c.d.__fb) { _data = c.d; return _data; }
+      }
+
+      return Promise.all([
+        readSettingsFB().catch(function () { return null; }),
+        readProductsFB().catch(function () { return null; }),
+        readShippingFB().catch(function () { return null; }),
+        readCouponsFB().catch(function () { return null; })
+      ]).then(function (res) {
+        var fbSettings = res[0] || {};
+        var products = res[1];
+        var shipping = res[2];
+        var coupons = res[3];
+
+        // إذا فشل كل شيء → نستخدم البيانات المحلية
+        if (!products) {
           _data = {
-            // ندمج الإعدادات المحلية أولاً (تحتفظ بالرمز السري) ثم نطبق إعدادات الخادم
-            settings: deepMerge(deepMerge(seed.settings, locals.settings || {}), res.settings || {}),
-            products: (res.products != null) ? res.products : seed.products,
-            shipping: res.shipping || {},
-            shippingDefaults: res.shippingDefaults || seed.shippingDefaults,
-            freeShipping: res.freeShipping || seed.freeShipping,
-            coupons: res.coupons || seed.coupons
-          };
-          EH.lsSet(cacheKey, { t: Date.now(), d: _data });
-          return _data;
-        }).catch(function (err) {
-          // فشل الاتصال -> بيانات محلية (الوضع التجريبي)
-          _data = {
-            settings: settings,
+            settings: deepMerge(localSettings, { connected: false }),
             products: locals.products || seed.products,
             shipping: locals.shipping || {},
             shippingDefaults: locals.shippingDefaults || seed.shippingDefaults,
             freeShipping: locals.freeShipping || seed.freeShipping,
             coupons: locals.coupons || seed.coupons
           };
+          if (_seedFailed && !_notified) {
+            _notified = true;
+            try { EH.toast('تعذر تحميل بيانات المتجر — تحقق من اتصالك بالإنترنت', 'error'); } catch (e) {}
+          }
           return _data;
-        });
-      }
-      // الوضع التجريبي المحلي
-      _data = {
-        settings: settings,
-        products: locals.products || seed.products,
-        shipping: locals.shipping || {},
-        shippingDefaults: locals.shippingDefaults || seed.shippingDefaults,
-        freeShipping: locals.freeShipping || seed.freeShipping,
-        coupons: locals.coupons || seed.coupons
-      };
-      if (_seedFailed && !_notified) {
-        _notified = true;
-        try { EH.toast('تعذر تحميل بيانات المتجر — تحقق من اتصالك بالإنترنت', 'error'); } catch (e) {}
-      }
-      return _data;
+        }
+
+        // الإعدادات: نبدأ من القيم الافتراضية ثم نطبّق إعدادات Firebase
+        var mergedSettings = deepMerge(deepMerge(defaultSettings(), localSettings), fbSettings);
+        mergedSettings.connected = true;
+
+        // دمج منتجات Firebase فوق المنتجات التجريبية (بالرقم id) — لا تُفقد أي منتج
+        function overlayById(baseList, fbList) {
+          var out = baseList.slice();
+          var byId = {};
+          (fbList || []).forEach(function (x) { byId[x.id] = x; });
+          for (var i = 0; i < out.length; i++) {
+            if (byId[out[i].id]) { out[i] = byId[out[i].id]; delete byId[out[i].id]; }
+          }
+          Object.keys(byId).forEach(function (id) { out.push(byId[id]); });
+          return out;
+        }
+
+        _data = {
+          settings: mergedSettings,
+          products: overlayById(seed.products, products),
+          shipping: shipping || seed.shipping || {},
+          shippingDefaults: mergedSettings.shippingDefaults || seed.shippingDefaults,
+          freeShipping: mergedSettings.freeShipping || seed.freeShipping,
+          coupons: overlayById(seed.coupons || [], coupons),
+          __fb: true
+        };
+        try { EH.lsSet(cacheKey, { t: Date.now(), d: _data }); } catch (e) {}
+        return _data;
+      });
     });
   };
 
   EH.getSettings = function () { return _data ? _data.settings : null; };
 
-  // إبطال الكاش (بعد تعديلات الإدارة)
-  EH.invalidateCache = function () { EH.lsDel(LS.cache); };
+  // إبطال الكاش بعد تعديلات الإدارة
+  EH.invalidateCache = function () {
+    EH.lsDel(LS.cache);
+    try { EH.lsDel('eh.v1.__fbSeed'); } catch (e) {}
+  };
 
-  /* ---------- إنشاء طلب جديد ---------- */
+  /* ---------- إنشاء طلب جديد (Firestore + تصدير إلى Google Sheets) ---------- */
+  function genOrderId(seq) {
+    var d = new Date();
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    return 'EH-' + String(d.getFullYear()).slice(2) + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + ('000' + seq).slice(-4);
+  }
+
   EH.createOrder = function (order) {
-    var settings = _data ? _data.settings : null;
-    if (settings && isRemoteConfigured(settings)) {
-      return callScript(buildApiUrl(settings.apiUrl) + '?action=createOrder', { order: order })
-        .then(function (res) {
-          if (res && res.ok) return { ok: true, orderId: res.orderId };
-          return { ok: false, error: (res && res.error) || 'تعذر إرسال الطلب' };
-        });
-    }
-    // وضع تجريبي: حفظ محلياً
-    return loadSeed().then(function () {
-      var seq = (EH.lsGet(LS.seq, 0) || 0) + 1;
-      EH.lsSet(LS.seq, seq);
-      var d = new Date();
-      var pad = function (n) { return (n < 10 ? '0' : '') + n; };
-      var orderId = 'EH-' + String(d.getFullYear()).slice(2) + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + ('000' + seq).slice(-4);
-      order.id = orderId;
-      order.createdAt = d.toISOString();
+    var settings = _data ? _data.settings : (EH.lsGet(LS.settings, null) || {});
+    var seq = (EH.lsGet(LS.seq, 0) || 0) + 1;
+    EH.lsSet(LS.seq, seq);
+    var orderId = order.id || genOrderId(seq);
+
+    var c = order.customer || {};
+    var fullName = c.name || [c.firstName, c.lastName].filter(Boolean).join(' ').trim();
+
+    var doc = JSON.parse(JSON.stringify(order));
+    doc.id = orderId;
+    doc.createdAt = new Date().toISOString();
+    doc.status = 'review';
+    doc.confirmation = 'قيد المراجعة';
+    doc.customer = JSON.parse(JSON.stringify(c));
+    doc.customer.name = fullName;
+    if (!doc.customer.phone2) doc.customer.phone2 = '';
+
+    var persist = function () {
+      if (initFirebase() && db()) {
+        return db().collection('orders').doc(orderId).set(doc)
+          .then(function () { return { ok: true, orderId: orderId, fb: true }; })
+          .catch(function (err) { return { ok: false, error: 'تعذر حفظ الطلب: ' + (err.message || 'خطأ') }; });
+      }
+      // وضع محلي
       var orders = EH.lsGet(LS.orders, []);
-      orders.unshift(order);
+      orders.unshift(doc);
       EH.lsSet(LS.orders, orders);
       return { ok: true, orderId: orderId, demo: true };
+    };
+
+    return persist().then(function (res) {
+      if (res.ok) {
+        // تصدير (best-effort) إلى Google Sheets إن كان مُعداً
+        try {
+          if (settings.apiUrl) {
+            var payload = { order: doc };
+            fetch(String(settings.apiUrl).replace(/\/+$/, '') + '?action=createOrder', {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify(payload)
+            }).catch(function () {});
+          }
+        } catch (e) {}
+      }
+      return res;
     });
   };
 
-  /* ---------- عمليات الإدارة ---------- */
-  function adminCall(action, payload) {
-    var settings = EH.getSettings() || {};
-    if (!isRemoteConfigured(settings)) {
-      return Promise.resolve({ ok: false, error: 'الربط مع Google Sheets غير مُفعّل', demo: true });
-    }
-    payload.token = settings.apiToken;
-    return callScript(buildApiUrl(settings.apiUrl) + '?action=' + action, payload);
+  /* ---------- عمليات الإدارة (تتطلب تسجيل الدخول عبر Firebase) ---------- */
+  function requireAuth() {
+    return currentUser();
+  }
+  function guard() {
+    if (!initFirebase() || !db()) return { ok: false, error: 'Firebase غير مُفعّل — تحقق من اتصالك بالإنترنت' };
+    if (!currentUser()) return { ok: false, error: 'تحتاج إلى تسجيل الدخول أولاً' };
+    return true;
   }
 
   EH.getOrders = function () {
-    var settings = EH.getSettings() || {};
-    if (isRemoteConfigured(settings)) {
-      return adminCall('getOrders', {}).then(function (res) {
-        if (res.ok) return { ok: true, orders: res.orders || [] };
-        return res;
-      });
+    if (!initFirebase() || !db()) {
+      return Promise.resolve({ ok: true, orders: EH.lsGet(LS.orders, []), demo: true });
     }
-    return Promise.resolve({ ok: true, orders: EH.lsGet(LS.orders, []), demo: true });
+    if (!currentUser()) return Promise.resolve({ ok: true, orders: [], demo: true });
+    return db().collection('orders').orderBy('createdAt', 'desc').get()
+      .then(function (snap) {
+        var orders = snap.docs.map(function (d) {
+          var o = d.data();
+          o.id = d.id;
+          return o;
+        });
+        return { ok: true, orders: orders, demo: false };
+      })
+      .catch(function (err) {
+        return { ok: false, error: (err && err.message) || 'تعذر جلب الطلبات' };
+      });
   };
 
-  EH.saveProduct = function (product) { return adminCall('saveProduct', { product: product }); };
-  EH.deleteProduct = function (id) { return adminCall('deleteProduct', { id: id }); };
+  EH.saveProduct = function (product) {
+    if (guard() !== true) return Promise.resolve(guard());
+    var id = product.id;
+    return db().collection('products').doc(id).set(product).then(function () { return { ok: true }; })
+      .catch(function (err) { return { ok: false, error: (err && err.message) || 'فشل الحفظ' }; });
+  };
+
+  EH.deleteProduct = function (id) {
+    if (guard() !== true) return Promise.resolve(guard());
+    return db().collection('products').doc(id).delete().then(function () { return { ok: true }; })
+      .catch(function (err) { return { ok: false, error: (err && err.message) || 'فشل الحذف' }; });
+  };
+
   EH.saveShipping = function (matrix, defaults, freeShipping) {
-    return adminCall('saveShipping', { shipping: matrix, shippingDefaults: defaults, freeShipping: freeShipping });
-  };
-  EH.saveCoupon = function (coupon) { return adminCall('saveCoupon', { coupon: coupon }); };
-  EH.deleteCoupon = function (id) { return adminCall('deleteCoupon', { id: id }); };
-  EH.saveSettings = function (settings) { return adminCall('saveSettings', { settings: settings }); };
-  EH.updateOrderStatus = function (orderId, status) { return adminCall('updateOrderStatus', { orderId: orderId, status: status }); };
-  EH.deleteOrder = function (orderId) { return adminCall('deleteOrder', { orderId: orderId }); };
-  EH.verifyToken = function (token) {
-    var settings = EH.getSettings() || {};
-    if (!isRemoteConfigured(settings)) return Promise.resolve({ ok: false, error: 'لم يتم ضبط الرابط بعد' });
-    return callScript(buildApiUrl(settings.apiUrl) + '?action=verifyToken', { token: token });
-  };
-  EH.uploadImage = function (dataUrl, name) {
-    return adminCall('uploadImage', { data: dataUrl, name: name || 'image.webp' });
+    if (guard() !== true) return Promise.resolve(guard());
+    var writes = [];
+    Object.keys(matrix).forEach(function (wid) {
+      var row = matrix[wid] || {};
+      writes.push(db().collection('shipping').doc(String(wid)).set({
+        home: row.home != null ? row.home : null,
+        desk: row.desk != null ? row.desk : null,
+        free: !!row.free,
+        freeOver: row.freeOver != null ? row.freeOver : null
+      }));
+    });
+    // إعدادات الشحن العامة في وثيقة الإعدادات
+    writes.push(db().collection('settings').doc('store').set(
+      { shippingDefaults: defaults || {}, freeShipping: freeShipping || {} },
+      { merge: true }
+    ));
+    return Promise.all(writes).then(function () { return { ok: true }; })
+      .catch(function (err) { return { ok: false, error: (err && err.message) || 'فشل الحفظ' }; });
   };
 
-  // حفظ محلي (وضع تجريبي)
+  EH.saveCoupon = function (coupon) {
+    if (guard() !== true) return Promise.resolve(guard());
+    return db().collection('coupons').doc(coupon.id).set(coupon).then(function () { return { ok: true }; })
+      .catch(function (err) { return { ok: false, error: (err && err.message) || 'فشل الحفظ' }; });
+  };
+
+  EH.deleteCoupon = function (id) {
+    if (guard() !== true) return Promise.resolve(guard());
+    return db().collection('coupons').doc(id).delete().then(function () { return { ok: true }; })
+      .catch(function (err) { return { ok: false, error: (err && err.message) || 'فشل الحذف' }; });
+  };
+
+  EH.saveSettings = function (settings) {
+    if (guard() !== true) return Promise.resolve(guard());
+    var s = JSON.parse(JSON.stringify(settings || {}));
+    delete s.seq;
+    return db().collection('settings').doc('store').set(s, { merge: true }).then(function () { return { ok: true }; })
+      .catch(function (err) { return { ok: false, error: (err && err.message) || 'فشل الحفظ' }; });
+  };
+
+  EH.updateOrderStatus = function (orderId, status) {
+    if (guard() !== true) return Promise.resolve(guard());
+    var label = EH.CONFIG.STATUS_LABEL(status);
+    return db().collection('orders').doc(orderId).set(
+      { status: status, confirmation: label }, { merge: true }
+    ).then(function () { return { ok: true }; })
+      .catch(function (err) { return { ok: false, error: (err && err.message) || 'فشل التحديث' }; });
+  };
+
+  EH.deleteOrder = function (orderId) {
+    if (guard() !== true) return Promise.resolve(guard());
+    return db().collection('orders').doc(orderId).delete().then(function () { return { ok: true }; })
+      .catch(function (err) { return { ok: false, error: (err && err.message) || 'فشل الحذف' }; });
+  };
+
+  EH.verifyToken = function () {
+    return Promise.resolve({ ok: !!currentUser(), demo: !initFirebase() });
+  };
+
+  /* ---------- رفع الصور إلى Firebase Storage ---------- */
+  EH.uploadImage = function (dataUrl, name) {
+    if (guard() !== true) return Promise.resolve(guard());
+    if (!storage()) return Promise.resolve({ ok: false, error: 'التخزين غير متاح' });
+    var n = (name || 'image.webp').replace(/[^\w.\-]+/g, '_');
+    var ref = storage().ref('product-images/' + Date.now() + '-' + n);
+    return ref.putString(dataUrl, 'data_url', { contentType: 'image/webp' })
+      .then(function (snap) { return snap.ref.getDownloadURL(); })
+      .then(function (url) { return { ok: true, url: url }; })
+      .catch(function (err) { return { ok: false, error: (err && err.message) || 'فشل الرفع' }; });
+  };
+
+  /* ---------- حفظ محلي (احتياط) ---------- */
   EH.localSave = function (what, val) {
     if (what === 'products') EH.lsSet(LS.products, val);
     if (what === 'shipping') EH.lsSet(LS.shipping, val);
