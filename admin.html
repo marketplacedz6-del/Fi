@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لوحة التحكم | Elegance Home &amp; Style</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="assets/img/brand/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap"></noscript>
+<link rel="stylesheet" href="assets/css/admin.css">
+</head>
+<body>
+
+<div id="admin-login" class="login-wrap hidden">
+  <div class="login-card">
+    <img src="assets/img/brand/logo-trans.webp" alt="Elegance">
+    <h1>لوحة تحكم المتجر</h1>
+    <p>سجّل الدخول للمتابعة</p>
+    <input type="email" id="login-email" placeholder="البريد الإلكتروني" autocomplete="username">
+    <input type="password" id="login-pass" placeholder="كلمة السر" autocomplete="current-password">
+    <button class="btn btn-block btn-gold" id="pin-btn">دخول</button>
+    <p class="hint" style="margin-top:12px;font-size:12px;color:var(--muted)">بيانات الدخول الافتراضية: walid@gmail.com — كلمة السر: 2009<br>يمكن تغييرها من الإعدادات ← الأمان</p>
+  </div>
+</div>
+
+<div id="admin-app" class="hidden">
+  <div class="admin-top">
+    <div class="admin-top-in">
+      <span class="logo"><img src="assets/img/brand/logo-trans.webp" alt=""> لوحة التحكم</span>
+      <span class="badge-demo hidden" id="demo-badge">وضع تجريبي (بدون Google Sheets)</span>
+      <span class="spacer"></span>
+      <span class="user" id="admin-user"></span>
+      <button class="btn-logout" id="logout-btn">خروج</button>
+    </div>
+  </div>
+  <div class="container admin-body">
+    <nav class="admin-nav" id="admin-nav">
+      <a href="#dash" data-sec="dash">📊 لوحة القيادة</a>
+      <a href="#orders" data-sec="orders">📦 الطلبات</a>
+      <a href="#products" data-sec="products">🛍️ المنتجات</a>
+      <a href="#shipping" data-sec="shipping">🚚 مصفوفة الشحن</a>
+      <a href="#coupons" data-sec="coupons">🎟️ الكوبونات</a>
+      <a href="#settings" data-sec="settings">⚙️ الإعدادات</a>
+    </nav>
+    <main class="admin-content" id="admin-content"></main>
+  </div>
+</div>
+
+<div class="modal-back" id="modal-back"><div class="modal" id="modal-box"></div></div>
+<div class="toast" id="admin-toast"></div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/util.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/cart.js"></script>
+<script src="assets/js/pixels.js"></script>
+<script src="assets/js/admin.js"></script>
+<script src="assets/js/admin-catalog.js"></script>
+<script src="assets/js/admin-config.js"></script>
+</body>
+</html>

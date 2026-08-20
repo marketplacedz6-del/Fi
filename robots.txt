@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin.html
+Disallow: /thank-you.html
+
+Sitemap: https://marketplacedz6-del.github.io/Fi/sitemap.xml
