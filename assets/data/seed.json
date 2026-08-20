@@ -1,0 +1,287 @@
+{
+  "products": [
+    {
+      "id": "f1", "sku": "EH-FR-001", "name": "شمعة فانيلا وعنبر",
+      "category": "fragrance", "variantMode": "fragrance",
+      "desc": "شمعة فاخرة برائحة دافئة تجمع بين الفانيلا الحلوة والعنبر الشرقي. صُنعت يدوياً من شمع الصويا الطبيعي مع فتيل قطني، تحترق حتى 45 ساعة وتملأ منزلك بأجواء من الفخامة والدفء.",
+      "price": 2200, "oldPrice": 2900, "badge": "sale", "featured": true, "active": true,
+      "createdAt": "2026-07-20", "sales": 320,
+      "images": [{ "src": "assets/img/products/frag-candle-vanilla.webp" }],
+      "video": "",
+      "capacities": [
+        { "label": "200 غرام", "delta": 0 },
+        { "label": "400 غرام", "delta": 900 }
+      ],
+      "stock": { "200 غرام": 24, "400 غرام": 15 },
+      "related": ["f2", "f4", "a1", "a3", "f5"]
+    },
+    {
+      "id": "f2", "sku": "EH-FR-002", "name": "شمعة مسك وعود",
+      "category": "fragrance", "variantMode": "fragrance",
+      "desc": "مزيج فاخر من المسك الأبيض والعود الهندي الأصيل في شمعة سوداء أنيقة. رائحة آسرة تدوم طويلاً، مثالية للأمسيات والمناسبات الخاصة.",
+      "price": 2400, "oldPrice": 0, "badge": "best", "featured": true, "active": true,
+      "createdAt": "2026-07-10", "sales": 240,
+      "images": [{ "src": "assets/img/products/frag-candle-musk.webp" }],
+      "video": "",
+      "capacities": [
+        { "label": "200 غرام", "delta": 0 },
+        { "label": "400 غرام", "delta": 900 }
+      ],
+      "stock": { "200 غرام": 30, "400 غرام": 12 },
+      "related": ["f1", "f6", "a3", "a2", "f4"]
+    },
+    {
+      "id": "f3", "sku": "EH-FR-003", "name": "معطّر قصب — زهور بيضاء",
+      "category": "fragrance", "variantMode": "fragrance",
+      "desc": "معطّر منزلي أنيق برائحة الزهور البيضاء الناعمة. أعواد القصب الطبيعية تنشر العطر باستمرار لمدة تصل إلى 8 أسابيع بدون حرارة أو كهرباء.",
+      "price": 2600, "oldPrice": 0, "badge": "best", "featured": true, "active": true,
+      "createdAt": "2026-07-25", "sales": 185,
+      "images": [{ "src": "assets/img/products/frag-diffuser-white.webp" }],
+      "video": "",
+      "capacities": [
+        { "label": "100 مل", "delta": 0 },
+        { "label": "200 مل", "delta": 1000 }
+      ],
+      "stock": { "100 مل": 20, "200 مل": 10 },
+      "related": ["f5", "f1", "a4", "a6", "f7"]
+    },
+    {
+      "id": "f4", "sku": "EH-FR-004", "name": "معطّر قصب — مسك وعنبر",
+      "category": "fragrance", "variantMode": "fragrance",
+      "desc": "عبق شرقي دافئ من المسك والعنبر يمنح منزلك حضوراً فاخراً. زجاجة أنيقة بتصميم يليق بديكور منزلك العصري.",
+      "price": 2800, "oldPrice": 3400, "badge": "sale", "featured": false, "active": true,
+      "createdAt": "2026-07-05", "sales": 140,
+      "images": [{ "src": "assets/img/products/frag-diffuser-musk.webp" }],
+      "video": "",
+      "capacities": [
+        { "label": "100 مل", "delta": 0 },
+        { "label": "200 مل", "delta": 1000 }
+      ],
+      "stock": { "100 مل": 18, "200 مل": 0 },
+      "related": ["f1", "f2", "a5", "a1", "f6"]
+    },
+    {
+      "id": "f5", "sku": "EH-FR-005", "name": "بخاخ تعطير المنزل — لافندر",
+      "category": "fragrance", "variantMode": "fragrance",
+      "desc": "بخاخ منعش برائحة اللافندر الهادئة، مثالي لغرف النوم وغرف المعيشة. يمنح انتعاشاً فورياً ويدوم عطره لساعات.",
+      "price": 1900, "oldPrice": 2400, "badge": "sale", "featured": false, "active": true,
+      "createdAt": "2026-07-15", "sales": 95,
+      "images": [{ "src": "assets/img/products/frag-spray-lavender.webp" }],
+      "video": "",
+      "capacities": [
+        { "label": "250 مل", "delta": 0 },
+        { "label": "500 مل", "delta": 700 }
+      ],
+      "stock": { "250 مل": 35, "500 مل": 22 },
+      "related": ["f3", "f7", "a7", "a4", "f1"]
+    },
+    {
+      "id": "f6", "sku": "EH-FR-006", "name": "بخور عود هندي فاخر",
+      "category": "fragrance", "variantMode": "fragrance",
+      "desc": "قطع عود هندي طبيعي فاخر في علبة خشبية أنيقة، مع مبخرة برونزية صغيرة كهدية. رائحة عود أصيلة تدوم طويلاً.",
+      "price": 2800, "oldPrice": 3600, "badge": "sale", "featured": true, "active": true,
+      "createdAt": "2026-06-28", "sales": 190,
+      "images": [{ "src": "assets/img/products/frag-bakhoor.webp" }],
+      "video": "",
+      "capacities": [
+        { "label": "100 غرام", "delta": 0 },
+        { "label": "250 غرام", "delta": 1400 }
+      ],
+      "stock": { "100 غرام": 16, "250 غرام": 8 },
+      "related": ["f2", "f1", "a3", "a5", "f4"]
+    },
+    {
+      "id": "f7", "sku": "EH-FR-007", "name": "طقم هدايا إليغانس",
+      "category": "fragrance", "variantMode": "fragrance",
+      "desc": "طقم هدايا متكامل: شمعة معطرة + معطّر قصب + بخاخ منزلي، في علبة هدايا أنيقة بشريط ذهبي. الهدية المثالية للمناسبات.",
+      "price": 5900, "oldPrice": 7400, "badge": "new", "featured": true, "active": true,
+      "createdAt": "2026-08-10", "sales": 45,
+      "images": [{ "src": "assets/img/products/frag-giftset.webp" }],
+      "video": "",
+      "capacities": [
+        { "label": "الطقم الكلاسيكي", "delta": 0 },
+        { "label": "الطقم الفاخر", "delta": 2500 }
+      ],
+      "stock": { "الطقم الكلاسيكي": 10, "الطقم الفاخر": 6 },
+      "related": ["f1", "f5", "a2", "a4", "f3"]
+    },
+    {
+      "id": "a1", "sku": "EH-FA-001", "name": "فستان صيفي انسيابي",
+      "category": "fashion", "variantMode": "fashion",
+      "desc": "فستان صيفي بقصة انسيابية مريحة، خامة ناعمة تسمح بالتهوية. مثالي للإطلالات النهارية والمسائية. متوفر بعدة ألوان ومقاسات.",
+      "price": 6500, "oldPrice": 7900, "badge": "new", "featured": true, "active": true,
+      "createdAt": "2026-08-12", "sales": 120,
+      "images": [
+        { "src": "assets/img/products/fash-dress-beige.webp", "color": "بيج" },
+        { "src": "assets/img/products/fash-dress-black.webp", "color": "أسود" }
+      ],
+      "video": "",
+      "colors": [
+        { "name": "بيج", "hex": "#D9C7AC" },
+        { "name": "أسود", "hex": "#222222" }
+      ],
+      "sizes": ["S", "M", "L", "XL"],
+      "stock": {
+        "بيج|S": 5, "بيج|M": 8, "بيج|L": 6, "بيج|XL": 3,
+        "أسود|S": 4, "أسود|M": 7, "أسود|L": 5, "أسود|XL": 0
+      },
+      "related": ["f3", "f1", "a4", "a6", "f5"]
+    },
+    {
+      "id": "a2", "sku": "EH-FA-002", "name": "طقم قندورة قطنية مطرزة",
+      "category": "fashion", "variantMode": "fashion",
+      "desc": "طقم قندورة تقليدي عصري من القطن الفاخر بتطريز يدوي أنيق. خامة مريحة تناسب الاستخدام اليومي والمناسبات.",
+      "price": 5400, "oldPrice": 6600, "badge": "sale", "featured": true, "active": true,
+      "createdAt": "2026-07-18", "sales": 210,
+      "images": [
+        { "src": "assets/img/products/fash-qandoura-white.webp", "color": "أبيض" },
+        { "src": "assets/img/products/fash-qandoura-pink.webp", "color": "وردي" }
+      ],
+      "video": "",
+      "colors": [
+        { "name": "أبيض", "hex": "#F5F0E8" },
+        { "name": "وردي", "hex": "#E8B4B8" }
+      ],
+      "sizes": ["S", "M", "L", "XL"],
+      "stock": {
+        "أبيض|S": 6, "أبيض|M": 9, "أبيض|L": 7, "أبيض|XL": 4,
+        "وردي|S": 5, "وردي|M": 6, "وردي|L": 4, "وردي|XL": 2
+      },
+      "related": ["f7", "f2", "a5", "a7", "f4"]
+    },
+    {
+      "id": "a3", "sku": "EH-FA-003", "name": "عباية كاجوال بتطريز ذهبي",
+      "category": "fashion", "variantMode": "fashion",
+      "desc": "عباية كاجوال بقصة عصرية ولمسات تطريز ذهبي راقية. خامة مريحة وأنيقة تناسب مختلف المناسبات.",
+      "price": 5900, "oldPrice": 7200, "badge": "best", "featured": true, "active": true,
+      "createdAt": "2026-07-08", "sales": 280,
+      "images": [
+        { "src": "assets/img/products/fash-abaya-black.webp", "color": "أسود" },
+        { "src": "assets/img/products/fash-abaya-navy.webp", "color": "كحلي" }
+      ],
+      "video": "",
+      "colors": [
+        { "name": "أسود", "hex": "#1a1a1a" },
+        { "name": "كحلي", "hex": "#1F3050" }
+      ],
+      "sizes": ["S", "M", "L", "XL", "XXL"],
+      "stock": {
+        "أسود|S": 8, "أسود|M": 12, "أسود|L": 10, "أسود|XL": 6, "أسود|XXL": 3,
+        "كحلي|S": 5, "كحلي|M": 8, "كحلي|L": 7, "كحلي|XL": 4, "كحلي|XXL": 2
+      },
+      "related": ["f2", "f6", "a1", "a5", "f1"]
+    },
+    {
+      "id": "a4", "sku": "EH-FA-004", "name": "بلوزة حريرية أنيقة",
+      "category": "fashion", "variantMode": "fashion",
+      "desc": "بلوزة حريرية بقصة عصرية تليق بالإطلالات الرسمية والأنيقة. ملمس ناعم فاخر ولمعة راقية.",
+      "price": 4200, "oldPrice": 5200, "badge": "sale", "featured": false, "active": true,
+      "createdAt": "2026-07-22", "sales": 170,
+      "images": [
+        { "src": "assets/img/products/fash-blouse-emerald.webp", "color": "زمردي" },
+        { "src": "assets/img/products/fash-blouse-white.webp", "color": "أبيض" }
+      ],
+      "video": "",
+      "colors": [
+        { "name": "زمردي", "hex": "#046A4C" },
+        { "name": "أبيض", "hex": "#F5F0E8" }
+      ],
+      "sizes": ["S", "M", "L"],
+      "stock": {
+        "زمردي|S": 7, "زمردي|M": 10, "زمردي|L": 6,
+        "أبيض|S": 6, "أبيض|M": 8, "أبيض|L": 5
+      },
+      "related": ["f3", "f5", "a6", "a1", "f7"]
+    },
+    {
+      "id": "a5", "sku": "EH-FA-005", "name": "جاكيت نسائي قصير",
+      "category": "fashion", "variantMode": "fashion",
+      "desc": "جاكيت نسائي بقصة قصيرة عصرية، خامة متينة وأنيقة. القطعة المثالية لإكمال إطلالتك في المواسم الانتقالية.",
+      "price": 6800, "oldPrice": 8400, "badge": "sale", "featured": false, "active": true,
+      "createdAt": "2026-07-02", "sales": 88,
+      "images": [
+        { "src": "assets/img/products/fash-blazer-beige.webp", "color": "بيج" },
+        { "src": "assets/img/products/fash-blazer-black.webp", "color": "أسود" }
+      ],
+      "video": "",
+      "colors": [
+        { "name": "بيج", "hex": "#D9C7AC" },
+        { "name": "أسود", "hex": "#222222" }
+      ],
+      "sizes": ["S", "M", "L", "XL"],
+      "stock": {
+        "بيج|S": 4, "بيج|M": 6, "بيج|L": 5, "بيج|XL": 2,
+        "أسود|S": 5, "أسود|M": 7, "أسود|L": 6, "أسود|XL": 3
+      },
+      "related": ["f6", "f2", "a3", "a2", "f4"]
+    },
+    {
+      "id": "a6", "sku": "EH-FA-006", "name": "بنطال بالازو واسع",
+      "category": "fashion", "variantMode": "fashion",
+      "desc": "بنطال بالازو بقصة واسعة مريحة وأنيقة. خامة ناعمة تنسدل بجمال، مثالي للإطلالات العصرية.",
+      "price": 3800, "oldPrice": 4700, "badge": "sale", "featured": false, "active": true,
+      "createdAt": "2026-07-12", "sales": 130,
+      "images": [
+        { "src": "assets/img/products/fash-palazzo-black.webp", "color": "أسود" },
+        { "src": "assets/img/products/fash-palazzo-olive.webp", "color": "زيتي" }
+      ],
+      "video": "",
+      "colors": [
+        { "name": "أسود", "hex": "#222222" },
+        { "name": "زيتي", "hex": "#5A5F3C" }
+      ],
+      "sizes": ["S", "M", "L", "XL"],
+      "stock": {
+        "أسود|S": 9, "أسود|M": 12, "أسود|L": 10, "أسود|XL": 5,
+        "زيتي|S": 4, "زيتي|M": 6, "زيتي|L": 5, "زيتي|XL": 2
+      },
+      "related": ["f3", "f1", "a4", "a1", "f5"]
+    },
+    {
+      "id": "a7", "sku": "EH-FA-007", "name": "طقم بيجاما منزلي قطني",
+      "category": "fashion", "variantMode": "fashion",
+      "desc": "طقم بيجاما منزلي من القطن الناعم 100%، مريح وأنيق لأجمل أوقات الراحة في المنزل.",
+      "price": 4600, "oldPrice": 5600, "badge": "new", "featured": true, "active": true,
+      "createdAt": "2026-08-08", "sales": 75,
+      "images": [{ "src": "assets/img/products/fash-pajama-pink.webp" }],
+      "video": "",
+      "colors": [{ "name": "وردي", "hex": "#E8B4B8" }],
+      "sizes": ["S", "M", "L", "XL", "XXL"],
+      "stock": {
+        "وردي|S": 6, "وردي|M": 9, "وردي|L": 8, "وردي|XL": 5, "وردي|XXL": 3
+      },
+      "related": ["f5", "f3", "a2", "a4", "f7"]
+    }
+  ],
+  "shipping": {},
+  "shippingDefaults": { "home": 600, "desk": 400 },
+  "freeShipping": { "enabled": true, "minAmount": 8000 },
+  "coupons": [
+    { "id": "c1", "code": "WELCOME10", "type": "percent", "value": 10, "minOrder": 0, "expires": "", "maxUses": 500, "used": 0, "active": true },
+    { "id": "c2", "code": "FIRST500", "type": "fixed", "value": 500, "minOrder": 3000, "expires": "2026-12-31", "maxUses": 200, "used": 12, "active": true }
+  ],
+  "settings": {
+    "storeName": "Elegance Home & Style",
+    "storeNameAr": "إليغانس هوم أند ستايل",
+    "tagline": "عطور منزلية وأزياء راقية",
+    "phone": "0550123456",
+    "whatsapp": "0550123456",
+    "logo": "assets/img/brand/logo-trans.webp",
+    "currency": "دج",
+    "hero": {
+      "kind": "image",
+      "src": "assets/img/brand/hero.webp",
+      "title": "أناقة تعبق بالعطر… وتميّز يليق بك",
+      "subtitle": "اكتشفي مجموعتنا من عطور المنزل الفاخرة وأحدث صيحات الأزياء — الدفع عند الاستلام والتوصيل لجميع الولايات",
+      "ctaText": "تسوّقي الآن",
+      "ctaUrl": "shop.html"
+    },
+    "pixels": { "meta": "", "tiktok": "", "gtag": "" },
+    "footerText": "متجر إليغانس هوم أند ستايل — وجهتك الأولى للعطور المنزلية الفاخرة والأزياء الراقية في الجزائر.",
+    "facebook": "", "instagram": "", "tiktokUrl": "",
+    "adminEmail": "walid@gmail.com",
+    "adminPassHash": "f37f3f2b0dc57a86dee4ba6ff855283bb4d2f0dea1c5bd1b708853444c2ffcec",
+    "apiUrl": "",
+    "apiToken": ""
+  }
+}
